@@ -24,6 +24,11 @@ export interface TeamColor {
   headerText: string // contrasting header text
   ring: string // card ring / border color
   swatch: string // small legend/nav dot
+  // Raw hex values for canvas rendering (the share-as-image feature), where
+  // Tailwind classes aren't available.
+  hex: string // header background
+  textHex: string // header text
+  dotHex: string // solid dot / bullet
 }
 
 export interface Team {

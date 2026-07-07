@@ -14,7 +14,7 @@ function fmt(totalSeconds: number): string {
   return `${mm}:${ss.toString().padStart(2, '0')}`
 }
 
-const RADIUS = 130
+const RADIUS = 104
 const CIRCUM = 2 * Math.PI * RADIUS
 
 export function TimerView({ timer }: TimerViewProps) {
@@ -33,34 +33,24 @@ export function TimerView({ timer }: TimerViewProps) {
 
   const progress = duration > 0 ? remaining / duration : 0
   const almostDone = remaining <= 10 && remaining > 0 && running
-  const ringColor = almostDone ? '#f59e0b' : '#34d399' // amber-500 / emerald-400
+  const ringColor = almostDone ? '#f59e0b' : '#34d399'
 
-  const adjust = (delta: number) => {
-    const next = Math.max(30, Math.min(60 * 60, duration + delta))
-    setDuration(next)
-  }
+  const adjust = (delta: number) => setDuration(Math.max(30, Math.min(60 * 60, duration + delta)))
 
   return (
     <ViewShell title="Match Timer" subtitle="Interval timer with chime" icon={TimerIcon}>
-      <div className="flex flex-col items-center gap-6">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-between gap-3 py-1">
         {/* Countdown ring */}
         <div className="relative grid place-items-center">
-          <svg width="300" height="300" viewBox="0 0 300 300" className="-rotate-90">
+          <svg width="240" height="240" viewBox="0 0 240 240" className="-rotate-90">
+            <circle cx="120" cy="120" r={RADIUS} fill="none" stroke="#27272a" strokeWidth="14" />
             <circle
-              cx="150"
-              cy="150"
-              r={RADIUS}
-              fill="none"
-              stroke="#27272a"
-              strokeWidth="16"
-            />
-            <circle
-              cx="150"
-              cy="150"
+              cx="120"
+              cy="120"
               r={RADIUS}
               fill="none"
               stroke={ringColor}
-              strokeWidth="16"
+              strokeWidth="14"
               strokeLinecap="round"
               strokeDasharray={CIRCUM}
               strokeDashoffset={CIRCUM * (1 - progress)}
@@ -69,40 +59,46 @@ export function TimerView({ timer }: TimerViewProps) {
           </svg>
           <div className="absolute flex flex-col items-center">
             <span
-              className={`text-7xl font-black tabular-nums ${
+              className={`text-6xl font-black tabular-nums ${
                 almostDone ? 'text-amber-400' : 'text-zinc-50'
               }`}
             >
               {fmt(remaining)}
             </span>
-            <span className="mt-1 text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              {running ? (autoRepeat ? `Round ${round}` : 'Running') : remaining === 0 ? "Time's up" : 'Ready'}
+            <span className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              {running
+                ? autoRepeat
+                  ? `Round ${round}`
+                  : 'Running'
+                : remaining === 0
+                  ? "Time's up"
+                  : 'Ready'}
             </span>
           </div>
         </div>
 
-        {/* Fine adjust (disabled while running) */}
+        {/* Fine adjust */}
         <div className="flex items-center gap-4">
           <button
             type="button"
             onClick={() => adjust(-30)}
             disabled={running}
             aria-label="Subtract 30 seconds"
-            className="grid h-12 w-12 place-items-center rounded-2xl bg-zinc-800 text-zinc-100 transition active:scale-95 disabled:opacity-30"
+            className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-800 text-zinc-100 active:scale-95 disabled:opacity-30"
           >
             <Minus className="h-5 w-5" strokeWidth={2.5} />
           </button>
-          <span className="w-24 text-center text-sm text-zinc-400">
+          <span className="text-center text-xs text-zinc-400">
             Interval
             <br />
-            <span className="text-base font-semibold text-zinc-200">{fmt(duration)}</span>
+            <span className="text-sm font-semibold text-zinc-200">{fmt(duration)}</span>
           </span>
           <button
             type="button"
             onClick={() => adjust(30)}
             disabled={running}
             aria-label="Add 30 seconds"
-            className="grid h-12 w-12 place-items-center rounded-2xl bg-zinc-800 text-zinc-100 transition active:scale-95 disabled:opacity-30"
+            className="grid h-10 w-10 place-items-center rounded-xl bg-zinc-800 text-zinc-100 active:scale-95 disabled:opacity-30"
           >
             <Plus className="h-5 w-5" strokeWidth={2.5} />
           </button>
@@ -118,7 +114,7 @@ export function TimerView({ timer }: TimerViewProps) {
                 type="button"
                 onClick={() => setDuration(secs)}
                 disabled={running}
-                className={`flex-1 rounded-2xl py-3 text-sm font-bold transition active:scale-95 disabled:opacity-40 ${
+                className={`flex-1 rounded-xl py-2.5 text-sm font-bold transition active:scale-95 disabled:opacity-40 ${
                   active
                     ? 'bg-emerald-500 text-emerald-950'
                     : 'border border-zinc-700 bg-zinc-800 text-zinc-200'
@@ -135,10 +131,8 @@ export function TimerView({ timer }: TimerViewProps) {
           <button
             type="button"
             onClick={running ? pause : start}
-            className={`flex flex-[2] items-center justify-center gap-2 rounded-2xl py-5 text-xl font-black transition active:scale-[0.98] ${
-              running
-                ? 'bg-amber-500 text-amber-950'
-                : 'bg-emerald-500 text-emerald-950'
+            className={`flex flex-[2] items-center justify-center gap-2 rounded-2xl py-4 text-lg font-black transition active:scale-[0.98] ${
+              running ? 'bg-amber-500 text-amber-950' : 'bg-emerald-500 text-emerald-950'
             }`}
           >
             {running ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
@@ -148,7 +142,7 @@ export function TimerView({ timer }: TimerViewProps) {
             type="button"
             onClick={reset}
             aria-label="Reset timer"
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-800 py-5 text-lg font-bold text-zinc-200 transition active:scale-[0.98]"
+            className="flex flex-1 items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-800 py-4 text-zinc-200 transition active:scale-[0.98]"
           >
             <RotateCcw className="h-6 w-6" />
           </button>
@@ -158,23 +152,21 @@ export function TimerView({ timer }: TimerViewProps) {
         <button
           type="button"
           onClick={() => setAutoRepeat(!autoRepeat)}
-          className={`flex w-full items-center justify-between rounded-2xl border px-4 py-4 transition active:scale-[0.98] ${
-            autoRepeat
-              ? 'border-emerald-500/40 bg-emerald-500/10'
-              : 'border-zinc-800 bg-zinc-900'
+          className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 transition active:scale-[0.98] ${
+            autoRepeat ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-zinc-800 bg-zinc-900'
           }`}
         >
-          <span className="flex items-center gap-3 text-base font-semibold text-zinc-100">
+          <span className="flex items-center gap-3 text-sm font-semibold text-zinc-100">
             <Repeat className={`h-5 w-5 ${autoRepeat ? 'text-emerald-400' : 'text-zinc-500'}`} />
             Auto-repeat rounds
           </span>
           <span
-            className={`relative h-7 w-12 rounded-full transition ${
+            className={`relative h-6 w-11 rounded-full transition ${
               autoRepeat ? 'bg-emerald-500' : 'bg-zinc-700'
             }`}
           >
             <span
-              className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${
+              className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${
                 autoRepeat ? 'left-6' : 'left-1'
               }`}
             />

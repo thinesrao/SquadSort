@@ -71,7 +71,7 @@ export default function App() {
 
   return (
     <div className="mx-auto flex h-full max-w-md flex-col bg-zinc-950">
-      <main key={view} className="animate-view-in min-h-0 flex-1 overflow-y-auto">
+      <main key={view} className="animate-view-in min-h-0 flex-1 overflow-hidden">
         {renderView()}
       </main>
       <BottomNav active={view} onChange={setView} resultReady={teams.length > 0} />
