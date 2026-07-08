@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { Analytics } from '@vercel/analytics/react'
 import { usePersistentState } from './hooks/usePersistentState'
 import { useTimer } from './hooks/useTimer'
 import { useWakeLock } from './hooks/useWakeLock'
@@ -75,6 +76,8 @@ export default function App() {
         {renderView()}
       </main>
       <BottomNav active={view} onChange={setView} resultReady={teams.length > 0} />
+      {/* Vercel Web Analytics — collects page views in production, no-ops locally. */}
+      <Analytics />
     </div>
   )
 }
