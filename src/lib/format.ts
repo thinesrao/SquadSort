@@ -36,8 +36,13 @@ export function formatForWhatsApp(
   lines.push('')
 
   for (const team of teams) {
+    const starters = team.starters ?? team.players.length
     lines.push(`${team.color.emoji} *Team ${team.color.name}* (${team.players.length})`)
-    team.players.forEach((p, i) => lines.push(`${i + 1}. ${p}${payMark(p)}`))
+    team.players.slice(0, starters).forEach((p, i) => lines.push(`${i + 1}. ${p}${payMark(p)}`))
+    const subs = team.players.slice(starters)
+    if (subs.length > 0) {
+      lines.push(`🔁 Subs (on first → last): ${subs.map((p) => `${p}${payMark(p)}`).join(', ')}`)
+    }
     lines.push('')
   }
 

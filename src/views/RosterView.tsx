@@ -1,4 +1,4 @@
-import { ClipboardList, ArrowRight, Trash2, FileText } from 'lucide-react'
+import { ClipboardList, ArrowRight, Trash2, FileText, Star } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { StarRating } from '../components/StarRating'
 
@@ -32,6 +32,8 @@ interface RosterViewProps {
   players: string[]
   ratingOf: (name: string) => number
   onRate: (name: string, value: number) => void
+  showRatings: boolean
+  onToggleShowRatings: () => void
   onContinue: () => void
 }
 
@@ -41,6 +43,8 @@ export function RosterView({
   players,
   ratingOf,
   onRate,
+  showRatings,
+  onToggleShowRatings,
   onContinue,
 }: RosterViewProps) {
   return (
@@ -81,22 +85,50 @@ export function RosterView({
         />
 
         {players.length > 0 && (
-          <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900/60">
-            <div className="flex items-center justify-between px-3 pb-1 pt-2 text-[11px] font-semibold text-zinc-500">
-              <span>{players.length} players</span>
-              <span>skill ⭐</span>
+          <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/60">
+            <div className="flex items-center justify-between px-3 pb-1.5 pt-2">
+              <span className="text-[11px] font-semibold text-zinc-500">
+                {players.length} players
+              </span>
+              <button
+                type="button"
+                onClick={onToggleShowRatings}
+                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition active:scale-95 ${
+                  showRatings ? 'bg-amber-400/15 text-amber-300' : 'bg-zinc-800 text-zinc-400'
+                }`}
+              >
+                <Star className={`h-3 w-3 ${showRatings ? 'fill-amber-400 text-amber-400' : ''}`} />
+                {showRatings ? 'Hide ratings' : 'Rate players'}
+              </button>
             </div>
-            <ul className="divide-y divide-zinc-800/70">
-              {players.map((name, i) => (
-                <li key={`${name}-${i}`} className="flex items-center gap-2 px-3 py-2">
-                  <span className="w-5 shrink-0 text-right text-xs tabular-nums text-zinc-500">
-                    {i + 1}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-sm text-zinc-100">{name}</span>
-                  <StarRating value={ratingOf(name)} onChange={(v) => onRate(name, v)} />
-                </li>
-              ))}
-            </ul>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+              {showRatings ? (
+                <ul className="divide-y divide-zinc-800/70">
+                  {players.map((name, i) => (
+                    <li key={`${name}-${i}`} className="flex items-center gap-2 px-1 py-2">
+                      <span className="w-5 shrink-0 text-right text-xs tabular-nums text-zinc-500">
+                        {i + 1}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-zinc-100">{name}</span>
+                      <StarRating value={ratingOf(name)} onChange={(v) => onRate(name, v)} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 px-1 pt-1">
+                  {players.map((name, i) => (
+                    <span
+                      key={`${name}-${i}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-zinc-800 px-2.5 py-1 text-sm text-zinc-200"
+                    >
+                      <span className="text-[10px] font-semibold text-zinc-500">{i + 1}</span>
+                      {name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

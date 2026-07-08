@@ -150,8 +150,13 @@ function truncate(ctx: CanvasRenderingContext2D, text: string, maxW: number): st
 }
 
 // --- Block measuring + drawing --------------------------------------------
+const hasSubs = (team: Team) => (team.starters ?? team.players.length) < team.players.length
+
 const teamCardHeight = (team: Team) =>
-  HEADER_H + Math.max(1, team.players.length) * NAME_LINE + CARD_BOTTOM
+  HEADER_H +
+  Math.max(1, team.players.length) * NAME_LINE +
+  (hasSubs(team) ? NAME_LINE : 0) +
+  CARD_BOTTOM
 
 function scheduleHeight(schedule: Match[]): number {
   let h = SCHED_HEADER
@@ -208,13 +213,31 @@ function drawTeamCard(
 
   // Players (single column within the half-width card)
   const nameMax = w - 72 - (trackPay ? 34 : 0)
+  const starters = team.starters ?? team.players.length
+  let ry = y + HEADER_H
   team.players.forEach((name, i) => {
-    const ny = y + HEADER_H + i * NAME_LINE + 34
+    if (i === starters && starters < team.players.length) {
+      // "SUBS" divider
+      ctx.textAlign = 'left'
+      ctx.fillStyle = '#34d399'
+      ctx.font = font(20, 800)
+      ctx.fillText('SUBS', x + 24, ry + 30)
+      ctx.strokeStyle = '#27272a'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(x + 96, ry + 24)
+      ctx.lineTo(x + w - 16, ry + 24)
+      ctx.stroke()
+      ry += NAME_LINE
+    }
+    const isSub = i >= starters
+    const ny = ry + 34
     dot(ctx, x + 26, ny - 10, 7, team.color.dotHex)
     ctx.textAlign = 'left'
-    ctx.fillStyle = NAME_COLOR
+    ctx.fillStyle = isSub ? MUTED : NAME_COLOR
     ctx.font = font(30, 500)
-    ctx.fillText(truncate(ctx, `${i + 1}. ${name}`, nameMax), x + 44, ny)
+    const label = isSub ? `S${i - starters + 1}. ${name}` : `${i + 1}. ${name}`
+    ctx.fillText(truncate(ctx, label, nameMax), x + 44, ny)
     if (trackPay) {
       const isPaid = paid!.has(name)
       ctx.textAlign = 'center'
@@ -223,6 +246,7 @@ function drawTeamCard(
       ctx.fillText(isPaid ? '✓' : '✗', x + w - 24, ny)
       ctx.textAlign = 'left'
     }
+    ry += NAME_LINE
   })
 }
 

@@ -11,7 +11,7 @@ import { SettingsView } from './views/SettingsView'
 import { ResultView } from './views/ResultView'
 import { TimerView } from './views/TimerView'
 import { parsePlayers } from './lib/parser'
-import { generateTeams, generateBalancedTeams } from './lib/teamGenerator'
+import { generateTeams, generateBalancedTeams, generateEvenTeams } from './lib/teamGenerator'
 import { generateSchedule } from './lib/schedule'
 import { vibrate, HAPTIC } from './lib/haptics'
 import { DEFAULT_SETTINGS, DEFAULT_TIMER_SECONDS } from './constants'
@@ -23,7 +23,9 @@ export default function App() {
   const [settings, setSettings] = usePersistentState<Settings>('ss.settings', DEFAULT_SETTINGS)
   const [benchedList, setBenchedList] = usePersistentState<string[]>('ss.benched', [])
   const [ratings, setRatings] = usePersistentState<Record<string, number>>('ss.ratings', {})
+  const [showRatings, setShowRatings] = usePersistentState<boolean>('ss.showRatings', false)
   const [balancing, setBalancing] = usePersistentState<boolean>('ss.balance', false)
+  const [rollingSubs, setRollingSubs] = usePersistentState<boolean>('ss.rolling', true)
   const [paidList, setPaidList] = usePersistentState<string[]>('ss.paid', [])
   const [teams, setTeams] = usePersistentState<Team[]>('ss.teams', [])
   const [schedule, setSchedule] = usePersistentState<Match[]>('ss.schedule', [])
@@ -56,11 +58,15 @@ export default function App() {
   useWakeLock(timer.running)
 
   const generate = () => {
-    const t = balancing
-      ? generateBalancedTeams(activePlayers, ratingOf, settings.teamCount, settings.targetSize)
-      : generateTeams(activePlayers, settings.teamCount, settings.targetSize)
+    const { teamCount, targetSize } = settings
+    const rf = balancing ? ratingOf : null
+    const t = rollingSubs
+      ? generateEvenTeams(activePlayers, teamCount, targetSize, rf)
+      : balancing
+        ? generateBalancedTeams(activePlayers, ratingOf, teamCount, targetSize)
+        : generateTeams(activePlayers, teamCount, targetSize)
     setTeams(t)
-    setSchedule(generateSchedule(t, settings.targetSize))
+    setSchedule(generateSchedule(t, targetSize))
     vibrate(HAPTIC.success)
     setView('result')
   }
@@ -81,6 +87,8 @@ export default function App() {
             players={players}
             ratingOf={ratingOf}
             onRate={setRating}
+            showRatings={showRatings}
+            onToggleShowRatings={() => setShowRatings((v) => !v)}
             onContinue={() => setView('settings')}
           />
         )
@@ -95,6 +103,8 @@ export default function App() {
             activeCount={activePlayers.length}
             balancing={balancing}
             onToggleBalancing={setBalancing}
+            rollingSubs={rollingSubs}
+            onToggleRolling={setRollingSubs}
             onGenerate={generate}
           />
         )

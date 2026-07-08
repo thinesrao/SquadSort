@@ -1,5 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
-import { CircleDollarSign } from 'lucide-react'
+import { CircleDollarSign, Repeat } from 'lucide-react'
 import type { Team } from '../types'
 
 interface TeamCardProps {
@@ -24,6 +24,7 @@ export function TeamCard({
 }: TeamCardProps) {
   const { color, players } = team
   const draggable = !!onPlayerPointerDown
+  const starters = team.starters ?? players.length
 
   return (
     <div
@@ -48,37 +49,51 @@ export function TeamCard({
           const key = `${team.id}:${i}`
           const isDragging = activeKey === key
           const paid = isPaid?.(name) ?? false
+          const isSub = i >= starters
+          const subNo = i - starters + 1
           return (
-            <li
-              key={`${name}-${i}`}
-              data-player-key={key}
-              onPointerDown={
-                draggable ? (e) => onPlayerPointerDown?.(e, team.id, i, name) : undefined
-              }
-              onContextMenu={draggable ? (e) => e.preventDefault() : undefined}
-              className={`flex items-center gap-1 rounded text-sm leading-tight ${
-                draggable ? 'cursor-grab touch-none select-none py-0.5 active:cursor-grabbing' : ''
-              } ${isDragging ? 'opacity-30' : ''}`}
-            >
-              <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-zinc-500">
-                {i + 1}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-zinc-100">{name}</span>
-              {onTogglePaid && (
-                <button
-                  type="button"
-                  aria-label={`${name} ${paid ? 'paid' : 'unpaid'}`}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={() => onTogglePaid(name)}
-                  className="shrink-0 p-0.5 active:scale-90"
-                >
-                  <CircleDollarSign
-                    className={`h-4 w-4 ${paid ? 'text-emerald-400' : 'text-zinc-600'}`}
-                    strokeWidth={2.25}
-                  />
-                </button>
+            <div key={`${name}-${i}`}>
+              {i === starters && starters < players.length && (
+                <div className="my-1 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-emerald-400/80">
+                  <Repeat className="h-3 w-3" />
+                  Subs
+                  <span className="h-px flex-1 bg-zinc-800" />
+                </div>
               )}
-            </li>
+              <li
+                data-player-key={key}
+                onPointerDown={
+                  draggable ? (e) => onPlayerPointerDown?.(e, team.id, i, name) : undefined
+                }
+                onContextMenu={draggable ? (e) => e.preventDefault() : undefined}
+                className={`flex items-center gap-1 rounded text-sm leading-tight ${
+                  draggable ? 'cursor-grab touch-none select-none py-0.5 active:cursor-grabbing' : ''
+                } ${isDragging ? 'opacity-30' : ''} ${isSub ? 'text-zinc-400' : ''}`}
+              >
+                <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-zinc-500">
+                  {isSub ? `S${subNo}` : i + 1}
+                </span>
+                <span
+                  className={`min-w-0 flex-1 truncate ${isSub ? 'text-zinc-400' : 'text-zinc-100'}`}
+                >
+                  {name}
+                </span>
+                {onTogglePaid && (
+                  <button
+                    type="button"
+                    aria-label={`${name} ${paid ? 'paid' : 'unpaid'}`}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={() => onTogglePaid(name)}
+                    className="shrink-0 p-0.5 active:scale-90"
+                  >
+                    <CircleDollarSign
+                      className={`h-4 w-4 ${paid ? 'text-emerald-400' : 'text-zinc-600'}`}
+                      strokeWidth={2.25}
+                    />
+                  </button>
+                )}
+              </li>
+            </div>
           )
         })}
       </ol>

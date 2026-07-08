@@ -3,9 +3,9 @@
  * works offline. Autoplay policies require the AudioContext to be created/
  * resumed from a user gesture, so call `primeAudio()` on the Start tap.
  *
- * `playBuzzer()` is a one-shot harsh burst (used at the end of an auto-repeat
- * round). `startAlarm()` / `stopAlarm()` drive a loud, piercing two-tone
- * klaxon that repeats until stopped (the "time's up" alarm).
+ * The "time's up" alarm is a synthesized **referee full-time whistle**: a
+ * warbling ~3.3 kHz pea-whistle tone with band-passed air noise, played as a
+ * repeating peep–peep–peeeep until dismissed.
  */
 
 let ctx: AudioContext | null = null
@@ -27,55 +27,101 @@ export function primeAudio(): void {
   if (c && c.state === 'suspended') void c.resume()
 }
 
-/** A single harsh two-oscillator square-wave burst at a given frequency. */
-function burst(c: AudioContext, freq: number, when: number, dur: number, gain: number) {
-  for (const detune of [0, 8]) {
-    const osc = c.createOscillator()
-    const g = c.createGain()
-    osc.type = 'square'
-    osc.frequency.value = freq
-    osc.detune.value = detune
-    g.gain.setValueAtTime(0.0001, when)
-    g.gain.exponentialRampToValueAtTime(gain, when + 0.008)
-    g.gain.setValueAtTime(gain, when + dur - 0.04)
-    g.gain.exponentialRampToValueAtTime(0.0001, when + dur)
-    osc.connect(g)
-    g.connect(c.destination)
-    osc.start(when)
-    osc.stop(when + dur + 0.02)
-  }
+function whiteNoise(c: AudioContext, dur: number): AudioBufferSourceNode {
+  const len = Math.max(1, Math.floor(dur * c.sampleRate))
+  const buf = c.createBuffer(1, len, c.sampleRate)
+  const data = buf.getChannelData(0)
+  for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1
+  const src = c.createBufferSource()
+  src.buffer = buf
+  return src
 }
 
-/** One-shot harsh triple-buzz (round transition). */
+/** A single referee-whistle blast: warbling tone + air hiss. */
+function whistle(c: AudioContext, when: number, dur: number, level = 0.9) {
+  const master = c.createGain()
+  master.connect(c.destination)
+  master.gain.setValueAtTime(0.0001, when)
+  master.gain.exponentialRampToValueAtTime(level, when + 0.025)
+  master.gain.setValueAtTime(level, when + Math.max(0.06, dur - 0.07))
+  master.gain.exponentialRampToValueAtTime(0.0001, when + dur)
+
+  // Fundamental + overtone give the shrill pea-whistle timbre.
+  const o1 = c.createOscillator()
+  o1.type = 'sine'
+  o1.frequency.value = 3350
+  const o2 = c.createOscillator()
+  o2.type = 'sine'
+  o2.frequency.value = 5025
+  const o2g = c.createGain()
+  o2g.gain.value = 0.3
+
+  // Fast vibrato = the rattling pea.
+  const lfo = c.createOscillator()
+  lfo.type = 'sine'
+  lfo.frequency.value = 17
+  const lfoGain = c.createGain()
+  lfoGain.gain.value = 60
+  lfo.connect(lfoGain)
+  lfoGain.connect(o1.frequency)
+  lfoGain.connect(o2.frequency)
+
+  o1.connect(master)
+  o2.connect(o2g)
+  o2g.connect(master)
+
+  // Breathy air noise, band-passed around the whistle pitch.
+  const noise = whiteNoise(c, dur + 0.05)
+  const bp = c.createBiquadFilter()
+  bp.type = 'bandpass'
+  bp.frequency.value = 3400
+  bp.Q.value = 5
+  const ng = c.createGain()
+  ng.gain.value = 0.05
+  noise.connect(bp)
+  bp.connect(ng)
+  ng.connect(master)
+
+  const stopAt = when + dur + 0.03
+  o1.start(when)
+  o2.start(when)
+  lfo.start(when)
+  noise.start(when)
+  o1.stop(stopAt)
+  o2.stop(stopAt)
+  lfo.stop(stopAt)
+  noise.stop(stopAt)
+}
+
+/** Short double-pip whistle at an auto-repeat round transition. */
 export function playBuzzer(): void {
   const c = getCtx()
   if (!c) return
   if (c.state === 'suspended') void c.resume()
   const now = c.currentTime
-  burst(c, 1245, now, 0.16, 0.7)
-  burst(c, 1245, now + 0.22, 0.16, 0.7)
-  burst(c, 1660, now + 0.44, 0.26, 0.75)
+  whistle(c, now, 0.3)
+  whistle(c, now + 0.48, 0.3)
 }
 
-/** Start the repeating piercing klaxon; loops until stopAlarm(). */
+/** Start the repeating full-time whistle (peep–peep–peeeep); loops until stopAlarm(). */
 export function startAlarm(): void {
   const c = getCtx()
   if (!c) return
   if (c.state === 'suspended') void c.resume()
   if (alarmTimer != null) return
-  let high = false
-  const tick = () => {
+  const sequence = () => {
     const cc = getCtx()
     if (!cc) return
-    // Alternating two-tone siren — harsh and attention-grabbing.
-    burst(cc, high ? 1660 : 1108, cc.currentTime, 0.28, 0.85)
-    high = !high
+    const t = cc.currentTime
+    whistle(cc, t + 0.0, 0.4)
+    whistle(cc, t + 0.55, 0.4)
+    whistle(cc, t + 1.1, 1.0) // long final blast = full time
   }
-  tick()
-  alarmTimer = window.setInterval(tick, 320)
+  sequence()
+  alarmTimer = window.setInterval(sequence, 3000)
 }
 
-/** Stop the repeating klaxon. */
+/** Stop the repeating whistle. */
 export function stopAlarm(): void {
   if (alarmTimer != null) {
     window.clearInterval(alarmTimer)

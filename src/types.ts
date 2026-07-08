@@ -35,6 +35,7 @@ export interface Team {
   id: number // 0-based index, also its schedule id
   color: TeamColor
   players: Player[]
+  starters: number // first N players are starters; the rest are rolling subs
 }
 
 /** "Team X borrows N players from Team Y" for a rolling-sub round. */
