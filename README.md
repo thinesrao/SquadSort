@@ -15,16 +15,24 @@ The app flows through four thumb-reachable tabs:
    hidden formatting characters, ignores date/time/location header lines, keeps
    only numbered player lines, and shows a live player count.
 2. **Setup** — Chunky steppers for **Target team size** (default 7) and **Number
-   of teams** (default 3), plus a live split preview.
+   of teams** (default 3), a live split preview, and a **Squad pool** where you
+   can tap a player to **bench / exclude** them (late dropouts) and re-generate
+   with the new count.
 3. **Teams** — Randomized teams with fixed colors (**White**, **Black**, **Red**,
    …) shown as compact side-by-side columns, the match schedule with borrow
    notes, and two share options: **Copy text** (paste-ready WhatsApp block) and
-   **Share image** (a rendered PNG you can send straight to a WhatsApp group via
-   the native share sheet, with a download fallback).
+   **Share image** (a ~square rendered PNG, laid out White | Black over
+   Red | Schedule so WhatsApp doesn't crop it, sent via the native share sheet
+   with a download fallback). **Long-press a player to drag** them to another
+   team — drop on a player to swap, or on empty space to move.
 4. **Timer** — Big countdown ring, presets (5/8/10/12m), fine adjust, auto-repeat
-   rounds, a loud Web-Audio chime at zero, and best-effort screen Wake Lock.
+   rounds, a loud Web-Audio chime at zero, and screen Wake Lock to keep the phone
+   awake while running.
 
-State persists across tab switches and page refreshes (localStorage).
+Pitch-side touches: **haptic feedback** (`navigator.vibrate`) on team generation
+and a heavy buzz when the timer hits 0:00, and an installable **PWA** (web
+manifest + icons) so it can live on your home screen. State persists across tab
+switches and page refreshes (localStorage).
 
 ## The sorting algorithm (sequential fill)
 
@@ -73,11 +81,14 @@ src/
     parser.ts             # WhatsApp roster -> clean names
     teamGenerator.ts      # Fisher–Yates + sequential fill
     schedule.ts           # round-robin + borrow annotations
+    teamEdit.ts           # pure swap/move for manual drag edits
     format.ts             # "Copy for WhatsApp" text block
-    shareImage.ts         # Canvas-rendered PNG + Web Share / download
+    shareImage.ts         # Canvas-rendered ~square PNG + Web Share / download
     audio.ts              # Web Audio chime (no asset files)
+    haptics.ts            # navigator.vibrate patterns
     __tests__/            # vitest unit tests
-  hooks/                  # usePersistentState, useTimer, useWakeLock
+  hooks/                  # usePersistentState, useTimer, useWakeLock, usePlayerDrag
   components/             # BottomNav, ViewShell, TeamCard, MatchCard, Stepper
   views/                  # RosterView, SettingsView, ResultView, TimerView
+public/                   # logo.svg, PNG icons, web manifest (PWA / favicon)
 ```
