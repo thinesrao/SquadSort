@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { playChime, primeAudio } from '../lib/audio'
+import { vibrate, HAPTIC } from '../lib/haptics'
 
 export interface TimerController {
   duration: number // configured length, seconds
@@ -43,6 +44,7 @@ export function useTimer(initialSeconds: number): TimerController {
       }
       // Interval elapsed.
       playChime()
+      vibrate(HAPTIC.alarm)
       if (autoRepeatRef.current) {
         setRound((r) => r + 1)
         endAtRef.current = Date.now() + durationRef.current * 1000

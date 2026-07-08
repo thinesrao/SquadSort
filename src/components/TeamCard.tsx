@@ -1,14 +1,26 @@
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import type { Team } from '../types'
 
 interface TeamCardProps {
   team: Team
+  /** Drag support (Teams view). */
+  onPlayerPointerDown?: (e: ReactPointerEvent, teamId: number, index: number, name: string) => void
+  activeKey?: string | null // "teamId:index" currently being dragged
+  isOver?: boolean // this column is the current drop target
 }
 
 /** Compact team column for the multi-up grid on the Teams view. */
-export function TeamCard({ team }: TeamCardProps) {
+export function TeamCard({ team, onPlayerPointerDown, activeKey, isOver }: TeamCardProps) {
   const { color, players } = team
+  const draggable = !!onPlayerPointerDown
+
   return (
-    <div className={`flex min-h-0 flex-col overflow-hidden rounded-xl bg-zinc-900 ring-1 ${color.ring}`}>
+    <div
+      data-team-col={team.id}
+      className={`flex min-h-0 flex-col overflow-hidden rounded-xl bg-zinc-900 ring-1 transition ${
+        isOver ? 'ring-2 ring-emerald-400' : color.ring
+      }`}
+    >
       <div
         className={`flex items-center justify-between gap-1 px-2 py-1.5 ${color.headerBg} ${color.headerText}`}
       >
@@ -21,14 +33,28 @@ export function TeamCard({ team }: TeamCardProps) {
         </span>
       </div>
       <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-1.5">
-        {players.map((name, i) => (
-          <li key={`${name}-${i}`} className="flex items-baseline gap-1 text-sm leading-tight">
-            <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-zinc-500">
-              {i + 1}
-            </span>
-            <span className="truncate text-zinc-100">{name}</span>
-          </li>
-        ))}
+        {players.map((name, i) => {
+          const key = `${team.id}:${i}`
+          const isDragging = activeKey === key
+          return (
+            <li
+              key={`${name}-${i}`}
+              data-player-key={key}
+              onPointerDown={
+                draggable ? (e) => onPlayerPointerDown?.(e, team.id, i, name) : undefined
+              }
+              onContextMenu={draggable ? (e) => e.preventDefault() : undefined}
+              className={`flex items-baseline gap-1 rounded text-sm leading-tight ${
+                draggable ? 'cursor-grab touch-none select-none py-0.5 active:cursor-grabbing' : ''
+              } ${isDragging ? 'opacity-30' : ''}`}
+            >
+              <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-zinc-500">
+                {i + 1}
+              </span>
+              <span className="truncate text-zinc-100">{name}</span>
+            </li>
+          )
+        })}
       </ol>
     </div>
   )

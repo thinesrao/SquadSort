@@ -16,22 +16,22 @@ export function Stepper({ label, hint, value, min, max, onChange }: StepperProps
   const inc = () => onChange(clamp(value + 1))
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-3.5">
-      <div className="min-w-0">
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-3">
+      <div className="mb-2 text-center">
         <div className="text-sm font-semibold text-zinc-100">{label}</div>
-        {hint && <div className="text-xs text-zinc-500">{hint}</div>}
+        {hint && <div className="text-[11px] text-zinc-500">{hint}</div>}
       </div>
-      <div className="flex shrink-0 items-center gap-3">
+      <div className="flex items-center justify-between gap-2">
         <button
           type="button"
           onClick={dec}
           disabled={value <= min}
           aria-label={`Decrease ${label}`}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-zinc-800 text-zinc-100 transition active:scale-95 disabled:opacity-30"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-zinc-800 text-zinc-100 transition active:scale-95 disabled:opacity-30"
         >
-          <Minus className="h-6 w-6" strokeWidth={2.5} />
+          <Minus className="h-5 w-5" strokeWidth={2.5} />
         </button>
-        <div className="w-9 text-center text-4xl font-black tabular-nums text-emerald-400">
+        <div className="flex-1 text-center text-3xl font-black tabular-nums text-emerald-400">
           {value}
         </div>
         <button
@@ -39,9 +39,9 @@ export function Stepper({ label, hint, value, min, max, onChange }: StepperProps
           onClick={inc}
           disabled={value >= max}
           aria-label={`Increase ${label}`}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-zinc-800 text-zinc-100 transition active:scale-95 disabled:opacity-30"
+          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-zinc-800 text-zinc-100 transition active:scale-95 disabled:opacity-30"
         >
-          <Plus className="h-6 w-6" strokeWidth={2.5} />
+          <Plus className="h-5 w-5" strokeWidth={2.5} />
         </button>
       </div>
     </div>
