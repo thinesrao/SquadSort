@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Users, Copy, Check, Shuffle, ArrowLeft } from 'lucide-react'
+import { Users, Copy, Check, Shuffle, Image as ImageIcon, Loader2 } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { TeamCard } from '../components/TeamCard'
 import { MatchCard } from '../components/MatchCard'
 import { formatForWhatsApp } from '../lib/format'
+import { shareTeamsImage } from '../lib/shareImage'
 import type { Match, Settings, Team } from '../types'
 
 interface ResultViewProps {
@@ -38,17 +39,22 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/** Grid column count that keeps team columns readable at phone widths. */
+function gridColsClass(n: number): string {
+  if (n <= 2) return 'grid-cols-2'
+  if (n === 4) return 'grid-cols-2'
+  return 'grid-cols-3'
+}
+
 function EmptyState({ onGoToSetup }: { onGoToSetup: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
       <span className="grid h-16 w-16 place-items-center rounded-2xl bg-zinc-900 text-zinc-600">
         <Users className="h-8 w-8" />
       </span>
       <div>
         <p className="text-lg font-semibold text-zinc-200">No teams yet</p>
-        <p className="mt-1 text-sm text-zinc-500">
-          Add players, then generate teams in Setup.
-        </p>
+        <p className="mt-1 text-sm text-zinc-500">Add players, then generate teams in Setup.</p>
       </div>
       <button
         type="button"
@@ -69,6 +75,7 @@ export function ResultView({
   onGoToSetup,
 }: ResultViewProps) {
   const [copied, setCopied] = useState(false)
+  const [imgState, setImgState] = useState<'idle' | 'working' | 'done'>('idle')
 
   if (teams.length === 0) {
     return (
@@ -86,53 +93,83 @@ export function ResultView({
     }
   }
 
+  const handleShareImage = async () => {
+    setImgState('working')
+    try {
+      await shareTeamsImage(teams, schedule, settings)
+      setImgState('done')
+      window.setTimeout(() => setImgState('idle'), 1800)
+    } catch {
+      setImgState('idle')
+    }
+  }
+
   return (
-    <ViewShell title="Teams" subtitle="Your generated squads" icon={Users}>
-      <div className="flex flex-col gap-4">
+    <ViewShell
+      title="Teams"
+      subtitle={`${teams.length} teams · ${teams.reduce((n, t) => n + t.players.length, 0)} players`}
+      icon={Users}
+      action={
         <button
           type="button"
-          onClick={handleCopy}
-          className={`flex items-center justify-center gap-2 rounded-2xl py-4 text-lg font-bold transition active:scale-[0.98] ${
-            copied ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-emerald-950'
-          }`}
+          onClick={onRegenerate}
+          aria-label="Re-shuffle teams"
+          className="grid h-8 w-8 place-items-center rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-200 active:scale-95"
         >
-          {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
-          {copied ? 'Copied!' : 'Copy for WhatsApp'}
+          <Shuffle className="h-4 w-4" />
         </button>
-
-        <section className="flex flex-col gap-3">
+      }
+    >
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        {/* Team columns */}
+        <div className={`grid min-h-0 flex-1 gap-2 ${gridColsClass(teams.length)}`}>
           {teams.map((team) => (
-            <TeamCard key={team.id} team={team} targetSize={settings.targetSize} />
+            <TeamCard key={team.id} team={team} />
           ))}
-        </section>
+        </div>
 
+        {/* Schedule */}
         {schedule.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <h2 className="mt-2 text-sm font-bold uppercase tracking-wide text-zinc-500">
+          <div className="shrink-0">
+            <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-zinc-500">
               Match Schedule
             </h2>
-            {schedule.map((m) => (
-              <MatchCard key={m.index} match={m} teams={teams} />
-            ))}
-          </section>
+            <div className="flex max-h-44 flex-col gap-1.5 overflow-y-auto">
+              {schedule.map((m) => (
+                <MatchCard key={m.index} match={m} teams={teams} />
+              ))}
+            </div>
+          </div>
         )}
 
-        <div className="mt-2 flex gap-3">
+        {/* Actions */}
+        <div className="grid shrink-0 grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={onGoToSetup}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-800 py-3.5 text-base font-semibold text-zinc-200 transition active:scale-[0.98]"
+            onClick={handleCopy}
+            className={`flex items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold transition active:scale-[0.98] ${
+              copied ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-100 ring-1 ring-zinc-700'
+            }`}
           >
-            <ArrowLeft className="h-5 w-5" />
-            Setup
+            {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
+            {copied ? 'Copied!' : 'Copy text'}
           </button>
           <button
             type="button"
-            onClick={onRegenerate}
-            className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-800 py-3.5 text-base font-semibold text-zinc-200 transition active:scale-[0.98]"
+            onClick={handleShareImage}
+            disabled={imgState === 'working'}
+            className={`flex items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold transition active:scale-[0.98] ${
+              imgState === 'done' ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-emerald-950'
+            }`}
           >
-            <Shuffle className="h-5 w-5" />
-            Re-shuffle
+            {imgState === 'working' ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : imgState === 'done' ? (
+              <Check className="h-5 w-5" />
+            ) : (
+              <ImageIcon className="h-5 w-5" />
+            )}
+            {imgState === 'working' ? 'Preparing…' : imgState === 'done' ? 'Shared!' : 'Share image'}
           </button>
         </div>
       </div>

@@ -17,7 +17,10 @@ The app flows through four thumb-reachable tabs:
 2. **Setup** — Chunky steppers for **Target team size** (default 7) and **Number
    of teams** (default 3), plus a live split preview.
 3. **Teams** — Randomized teams with fixed colors (**White**, **Black**, **Red**,
-   …), the match schedule with borrow notes, and a **Copy for WhatsApp** button.
+   …) shown as compact side-by-side columns, the match schedule with borrow
+   notes, and two share options: **Copy text** (paste-ready WhatsApp block) and
+   **Share image** (a rendered PNG you can send straight to a WhatsApp group via
+   the native share sheet, with a download fallback).
 4. **Timer** — Big countdown ring, presets (5/8/10/12m), fine adjust, auto-repeat
    rounds, a loud Web-Audio chime at zero, and best-effort screen Wake Lock.
 
@@ -71,6 +74,7 @@ src/
     teamGenerator.ts      # Fisher–Yates + sequential fill
     schedule.ts           # round-robin + borrow annotations
     format.ts             # "Copy for WhatsApp" text block
+    shareImage.ts         # Canvas-rendered PNG + Web Share / download
     audio.ts              # Web Audio chime (no asset files)
     __tests__/            # vitest unit tests
   hooks/                  # usePersistentState, useTimer, useWakeLock
