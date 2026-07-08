@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import { usePersistentState } from './hooks/usePersistentState'
@@ -11,47 +11,83 @@ import { SettingsView } from './views/SettingsView'
 import { ResultView } from './views/ResultView'
 import { TimerView } from './views/TimerView'
 import { parsePlayers } from './lib/parser'
-import { generateTeams, generateBalancedTeams, generateEvenTeams } from './lib/teamGenerator'
+import { buildTeams } from './lib/teamGenerator'
 import { generateSchedule } from './lib/schedule'
+import { readSharedFromHash } from './lib/shareLink'
+import { speak } from './lib/speech'
 import { vibrate, HAPTIC } from './lib/haptics'
 import { DEFAULT_SETTINGS, DEFAULT_TIMER_SECONDS } from './constants'
-import type { Match, Settings, Team, ViewId } from './types'
+import type { Match, Pairing, Settings, Team, ViewId } from './types'
 
 export default function App() {
   const [view, setView] = usePersistentState<ViewId>('ss.view', 'roster')
   const [rawInput, setRawInput] = usePersistentState<string>('ss.raw', '')
+  const [roster, setRoster] = usePersistentState<string[]>('ss.roster', [])
   const [settings, setSettings] = usePersistentState<Settings>('ss.settings', DEFAULT_SETTINGS)
   const [benchedList, setBenchedList] = usePersistentState<string[]>('ss.benched', [])
   const [ratings, setRatings] = usePersistentState<Record<string, number>>('ss.ratings', {})
+  const [gkList, setGkList] = usePersistentState<string[]>('ss.gks', [])
   const [showRatings, setShowRatings] = usePersistentState<boolean>('ss.showRatings', false)
   const [balancing, setBalancing] = usePersistentState<boolean>('ss.balance', false)
   const [rollingSubs, setRollingSubs] = usePersistentState<boolean>('ss.rolling', true)
+  const [pairings, setPairings] = usePersistentState<Pairing[]>('ss.pairs', [])
   const [paidList, setPaidList] = usePersistentState<string[]>('ss.paid', [])
   const [teams, setTeams] = usePersistentState<Team[]>('ss.teams', [])
   const [schedule, setSchedule] = usePersistentState<Match[]>('ss.schedule', [])
+  const [matchScores, setMatchScores] = usePersistentState<number[][]>('ss.scores', [])
+  const [currentMatch, setCurrentMatch] = usePersistentState<number>('ss.match', 0)
+  const [autoAdvance, setAutoAdvance] = usePersistentState<boolean>('ss.autoadvance', true)
+  const [speakOn, setSpeakOn] = usePersistentState<boolean>('ss.speak', false)
+  const [warnings, setWarnings] = useState<string[]>([])
 
-  // Derive players from the raw input so the two never drift apart.
-  const players = useMemo(() => parsePlayers(rawInput), [rawInput])
-
-  // "Quick Bench": excluded players are dropped from the active pool.
   const benched = useMemo(() => new Set(benchedList), [benchedList])
-  const activePlayers = useMemo(
-    () => players.filter((p) => !benched.has(p)),
-    [players, benched],
-  )
+  const gks = useMemo(() => new Set(gkList), [gkList])
   const paid = useMemo(() => new Set(paidList), [paidList])
-
-  // Ratings persist across sessions and auto-apply to recognized names.
+  const activePlayers = useMemo(() => roster.filter((p) => !benched.has(p)), [roster, benched])
   const ratingOf = (name: string) => ratings[name] ?? 2
 
+  // --- Import shared teams from the URL hash (one-time on load) ---
+  useEffect(() => {
+    const shared = readSharedFromHash()
+    if (!shared) return
+    const sched = generateSchedule(shared.teams, shared.targetSize)
+    setSettings((s) => ({ ...s, targetSize: shared.targetSize, teamCount: shared.teams.length }))
+    setTeams(shared.teams)
+    setSchedule(sched)
+    setMatchScores(sched.map(() => [0, 0]))
+    setCurrentMatch(0)
+    setView('result')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // --- Roster editing ---
+  const importRaw = (v: string) => {
+    setRawInput(v)
+    setRoster(parsePlayers(v))
+  }
+  const addPlayer = (name: string) => {
+    const clean = name.trim()
+    if (clean) setRoster((prev) => [...prev, clean])
+  }
+  const renamePlayer = (index: number, name: string) => {
+    const clean = name.trim()
+    setRoster((prev) => (clean ? prev.map((p, i) => (i === index ? clean : p)) : prev))
+  }
+  const removePlayer = (index: number) => setRoster((prev) => prev.filter((_, i) => i !== index))
+
   const toggleBench = (name: string) =>
-    setBenchedList((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
-    )
+    setBenchedList((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]))
   const setRating = (name: string, value: number) =>
     setRatings((prev) => ({ ...prev, [name]: value }))
+  const toggleGk = (name: string) =>
+    setGkList((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]))
   const togglePaid = (name: string) =>
     setPaidList((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]))
+  const addPairing = (p: Pairing) =>
+    setPairings((prev) =>
+      prev.some((x) => x.a === p.a && x.b === p.b) ? prev : [...prev, p],
+    )
+  const removePairing = (index: number) => setPairings((prev) => prev.filter((_, i) => i !== index))
 
   // Timer state lives at the top level so it keeps running across tab switches.
   const timer = useTimer(DEFAULT_TIMER_SECONDS)
@@ -59,22 +95,63 @@ export default function App() {
 
   const generate = () => {
     const { teamCount, targetSize } = settings
-    const rf = balancing ? ratingOf : null
-    const t = rollingSubs
-      ? generateEvenTeams(activePlayers, teamCount, targetSize, rf)
-      : balancing
-        ? generateBalancedTeams(activePlayers, ratingOf, teamCount, targetSize)
-        : generateTeams(activePlayers, teamCount, targetSize)
+    const activeSet = new Set(activePlayers)
+    const keep = (t: Pairing['type']) =>
+      pairings
+        .filter((p) => p.type === t && activeSet.has(p.a) && activeSet.has(p.b))
+        .map((p) => [p.a, p.b] as [string, string])
+    const { teams: t, warnings: w } = buildTeams(activePlayers, {
+      teamCount,
+      targetSize,
+      rollingSubs,
+      ratingOf: balancing ? ratingOf : null,
+      isGk: (n) => gks.has(n),
+      keepTogether: keep('together'),
+      keepApart: keep('apart'),
+    })
+    const sched = generateSchedule(t, targetSize)
     setTeams(t)
-    setSchedule(generateSchedule(t, targetSize))
+    setWarnings(w)
+    setSchedule(sched)
+    setMatchScores(sched.map(() => [0, 0]))
+    setCurrentMatch(0)
     vibrate(HAPTIC.success)
     setView('result')
   }
 
-  // Manual edit (drag swap / move): persist new teams and refresh the schedule.
   const editTeams = (next: Team[]) => {
     setTeams(next)
-    setSchedule(generateSchedule(next, settings.targetSize))
+    const sched = generateSchedule(next, settings.targetSize)
+    setSchedule(sched)
+    setMatchScores((prev) => sched.map((_, i) => prev[i] ?? [0, 0]))
+    setCurrentMatch((c) => Math.min(c, Math.max(0, sched.length - 1)))
+  }
+
+  // --- Scoreboard ---
+  const bumpScore = (side: 0 | 1, delta: number) =>
+    setMatchScores((prev) => {
+      const nextArr = prev.map((a) => [...a])
+      while (nextArr.length <= currentMatch) nextArr.push([0, 0])
+      const cur = nextArr[currentMatch]
+      cur[side] = Math.max(0, (cur[side] ?? 0) + delta)
+      return nextArr
+    })
+  const speakMatchup = (i: number) => {
+    const m = schedule[i]
+    if (m) speak(`${teams[m.home]?.color.name} versus ${teams[m.away]?.color.name}`)
+  }
+  const goToMatch = (i: number) => {
+    const clamped = Math.max(0, Math.min(i, schedule.length - 1))
+    setCurrentMatch(clamped)
+    if (speakOn) speakMatchup(clamped)
+  }
+  const advanceMatch = () => {
+    if (schedule.length === 0) return
+    if (currentMatch < schedule.length - 1) goToMatch(currentMatch + 1)
+  }
+  const onAlarmStop = () => {
+    timer.stopAlarm()
+    if (autoAdvance) advanceMatch()
   }
 
   const renderView = () => {
@@ -83,12 +160,17 @@ export default function App() {
         return (
           <RosterView
             rawInput={rawInput}
-            onChangeRaw={setRawInput}
-            players={players}
+            onChangeRaw={importRaw}
+            roster={roster}
             ratingOf={ratingOf}
             onRate={setRating}
+            isGk={(n) => gks.has(n)}
+            onToggleGk={toggleGk}
             showRatings={showRatings}
             onToggleShowRatings={() => setShowRatings((v) => !v)}
+            onAddPlayer={addPlayer}
+            onRenamePlayer={renamePlayer}
+            onRemovePlayer={removePlayer}
             onContinue={() => setView('settings')}
           />
         )
@@ -97,7 +179,7 @@ export default function App() {
           <SettingsView
             settings={settings}
             onChange={setSettings}
-            players={players}
+            players={roster}
             benched={benched}
             onToggleBench={toggleBench}
             activeCount={activePlayers.length}
@@ -105,6 +187,10 @@ export default function App() {
             onToggleBalancing={setBalancing}
             rollingSubs={rollingSubs}
             onToggleRolling={setRollingSubs}
+            activePlayers={activePlayers}
+            pairings={pairings}
+            onAddPairing={addPairing}
+            onRemovePairing={removePairing}
             onGenerate={generate}
           />
         )
@@ -115,6 +201,10 @@ export default function App() {
             schedule={schedule}
             settings={settings}
             paid={paid}
+            gks={gks}
+            ratingOf={ratingOf}
+            balancing={balancing}
+            warnings={warnings}
             onTogglePaid={togglePaid}
             onRegenerate={generate}
             onEditTeams={editTeams}
@@ -122,7 +212,21 @@ export default function App() {
           />
         )
       case 'timer':
-        return <TimerView timer={timer} />
+        return (
+          <TimerView
+            timer={timer}
+            teams={teams}
+            schedule={schedule}
+            currentMatch={currentMatch}
+            matchScores={matchScores}
+            onBumpScore={bumpScore}
+            onGoToMatch={goToMatch}
+            autoAdvance={autoAdvance}
+            onToggleAutoAdvance={setAutoAdvance}
+            speakOn={speakOn}
+            onToggleSpeak={setSpeakOn}
+          />
+        )
     }
   }
 
@@ -132,7 +236,7 @@ export default function App() {
         {renderView()}
       </main>
       <BottomNav active={view} onChange={setView} resultReady={teams.length > 0} />
-      {timer.alarming && <AlarmOverlay onStop={timer.stopAlarm} />}
+      {timer.alarming && <AlarmOverlay onStop={onAlarmStop} />}
       {/* Vercel Web Analytics — collects page views in production, no-ops locally. */}
       <Analytics />
       {/* Vercel Speed Insights — collects performance metrics in production, no-ops locally. */}

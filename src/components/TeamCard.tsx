@@ -11,6 +11,9 @@ interface TeamCardProps {
   /** Payment tracking (Teams view). */
   isPaid?: (name: string) => boolean
   onTogglePaid?: (name: string) => void
+  /** Goalkeeper markers + skill strength. */
+  isGkName?: (name: string) => boolean
+  strength?: number // total ⭐ for this team
 }
 
 /** Compact team column for the multi-up grid on the Teams view. */
@@ -21,6 +24,8 @@ export function TeamCard({
   isOver,
   isPaid,
   onTogglePaid,
+  isGkName,
+  strength,
 }: TeamCardProps) {
   const { color, players } = team
   const draggable = !!onPlayerPointerDown
@@ -40,8 +45,9 @@ export function TeamCard({
           <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${color.swatch}`} aria-hidden />
           <span className="truncate">{color.name}</span>
         </span>
-        <span className="shrink-0 text-xs font-bold tabular-nums opacity-80">
-          {players.length}
+        <span className="flex shrink-0 items-center gap-1.5 text-xs font-bold tabular-nums">
+          {strength != null && <span className="opacity-70">★{strength}</span>}
+          <span className="opacity-80">{players.length}</span>
         </span>
       </div>
       <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-1.5">
@@ -73,6 +79,11 @@ export function TeamCard({
                 <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-zinc-500">
                   {isSub ? `S${subNo}` : i + 1}
                 </span>
+                {isGkName?.(name) && (
+                  <span className="shrink-0 rounded bg-emerald-500/20 px-1 text-[9px] font-bold text-emerald-300">
+                    GK
+                  </span>
+                )}
                 <span
                   className={`min-w-0 flex-1 truncate ${isSub ? 'text-zinc-400' : 'text-zinc-100'}`}
                 >

@@ -59,4 +59,11 @@ export interface Settings {
   teamCount: number
 }
 
+/** A "keep together" / "keep apart" constraint between two players. */
+export interface Pairing {
+  a: string
+  b: string
+  type: 'together' | 'apart'
+}
+
 export type ViewId = 'roster' | 'settings' | 'result' | 'timer'

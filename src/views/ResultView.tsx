@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Users, Copy, Check, Shuffle, Image as ImageIcon, Loader2, Hand } from 'lucide-react'
+import { Users, Copy, Check, Shuffle, Image as ImageIcon, Loader2, Hand, Link, AlertTriangle } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { TeamCard } from '../components/TeamCard'
 import { MatchCard } from '../components/MatchCard'
 import { formatForWhatsApp } from '../lib/format'
 import { shareTeamsImage } from '../lib/shareImage'
+import { buildShareUrl } from '../lib/shareLink'
 import { usePlayerDrag } from '../hooks/usePlayerDrag'
 import type { Match, Settings, Team } from '../types'
 
@@ -13,6 +14,10 @@ interface ResultViewProps {
   schedule: Match[]
   settings: Settings
   paid: Set<string>
+  gks: Set<string>
+  ratingOf: (name: string) => number
+  balancing: boolean
+  warnings: string[]
   onTogglePaid: (name: string) => void
   onRegenerate: () => void
   onEditTeams: (next: Team[]) => void
@@ -76,12 +81,17 @@ export function ResultView({
   schedule,
   settings,
   paid,
+  gks,
+  ratingOf,
+  balancing,
+  warnings,
   onTogglePaid,
   onRegenerate,
   onEditTeams,
   onGoToSetup,
 }: ResultViewProps) {
   const [copied, setCopied] = useState(false)
+  const [linked, setLinked] = useState(false)
   const [imgState, setImgState] = useState<'idle' | 'working' | 'done'>('idle')
   const { ghost, overTeamId, activeKey, dragging, startDrag } = usePlayerDrag(teams, onEditTeams)
 
@@ -93,18 +103,30 @@ export function ResultView({
     )
   }
 
+  const strengths = teams.map((t) => t.players.reduce((s, p) => s + ratingOf(p), 0))
+  const showStrength = balancing || new Set(teams.flatMap((t) => t.players).map(ratingOf)).size > 1
+  const spread = Math.max(...strengths) - Math.min(...strengths)
+
   const handleCopy = async () => {
-    const ok = await copyText(formatForWhatsApp(teams, schedule, settings, paid))
+    const ok = await copyText(formatForWhatsApp(teams, schedule, settings, paid, gks))
     if (ok) {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1800)
     }
   }
 
+  const handleCopyLink = async () => {
+    const ok = await copyText(buildShareUrl(teams, settings.targetSize))
+    if (ok) {
+      setLinked(true)
+      window.setTimeout(() => setLinked(false), 1800)
+    }
+  }
+
   const handleShareImage = async () => {
     setImgState('working')
     try {
-      await shareTeamsImage(teams, schedule, settings, paid)
+      await shareTeamsImage(teams, schedule, settings, paid, gks)
       setImgState('done')
       window.setTimeout(() => setImgState('idle'), 1800)
     } catch {
@@ -118,17 +140,36 @@ export function ResultView({
       subtitle={`${teams.length} teams · ${teams.reduce((n, t) => n + t.players.length, 0)} players`}
       icon={Users}
       action={
-        <button
-          type="button"
-          onClick={onRegenerate}
-          aria-label="Re-shuffle teams"
-          className="grid h-8 w-8 place-items-center rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-200 active:scale-95"
-        >
-          <Shuffle className="h-4 w-4" />
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            aria-label="Copy share link"
+            className={`grid h-8 w-8 place-items-center rounded-lg border border-zinc-700 active:scale-95 ${
+              linked ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-200'
+            }`}
+          >
+            {linked ? <Check className="h-4 w-4" /> : <Link className="h-4 w-4" />}
+          </button>
+          <button
+            type="button"
+            onClick={onRegenerate}
+            aria-label="Re-shuffle teams"
+            className="grid h-8 w-8 place-items-center rounded-lg border border-zinc-700 bg-zinc-800 text-zinc-200 active:scale-95"
+          >
+            <Shuffle className="h-4 w-4" />
+          </button>
+        </>
       }
     >
       <div className={`flex min-h-0 flex-1 flex-col gap-3 ${dragging ? 'select-none' : ''}`}>
+        {warnings.length > 0 && (
+          <div className="flex shrink-0 items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-300 ring-1 ring-amber-500/25">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{warnings.join(' · ')}</span>
+          </div>
+        )}
+
         {/* Team columns — long-press a player to move/swap */}
         <div className={`grid min-h-0 flex-1 gap-2 ${gridColsClass(teams.length)}`}>
           {teams.map((team) => (
@@ -140,13 +181,30 @@ export function ResultView({
               isOver={dragging && overTeamId === team.id}
               isPaid={(n) => paid.has(n)}
               onTogglePaid={onTogglePaid}
+              isGkName={(n) => gks.has(n)}
             />
           ))}
         </div>
 
-        <p className="-mt-1 flex shrink-0 items-center justify-center gap-1.5 text-[11px] text-zinc-500">
-          <Hand className="h-3.5 w-3.5" /> Long-press to move · tap 💲 to mark paid
-        </p>
+        <div className="-mt-1 flex shrink-0 flex-col items-center gap-0.5">
+          {showStrength && (
+            <div className="flex flex-wrap items-center justify-center gap-x-2 text-[11px]">
+              {teams.map((t, i) => (
+                <span key={t.id} className="text-zinc-400">
+                  <span className="text-zinc-500">{t.color.name}</span> ★{strengths[i]}
+                </span>
+              ))}
+              <span
+                className={`font-semibold ${spread <= 1 ? 'text-emerald-400' : 'text-amber-400'}`}
+              >
+                {spread === 0 ? 'even' : `±${spread}`}
+              </span>
+            </div>
+          )}
+          <p className="flex items-center gap-1.5 text-[11px] text-zinc-500">
+            <Hand className="h-3.5 w-3.5" /> Long-press to move
+          </p>
+        </div>
 
         {/* Schedule */}
         {schedule.length > 0 && (

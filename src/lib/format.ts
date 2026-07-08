@@ -27,9 +27,12 @@ export function formatForWhatsApp(
   schedule: Match[],
   settings: Settings,
   paid?: Set<string>,
+  gks?: Set<string>,
 ): string {
   const trackPay = !!paid && paid.size > 0
   const payMark = (name: string) => (trackPay ? (paid!.has(name) ? ' ✅' : ' ❌') : '')
+  const gkMark = (name: string) => (gks?.has(name) ? ' 🧤' : '')
+  const tag = (name: string) => `${name}${gkMark(name)}${payMark(name)}`
 
   const lines: string[] = []
   lines.push('⚽ *SquadSort Teams* ⚽')
@@ -38,10 +41,10 @@ export function formatForWhatsApp(
   for (const team of teams) {
     const starters = team.starters ?? team.players.length
     lines.push(`${team.color.emoji} *Team ${team.color.name}* (${team.players.length})`)
-    team.players.slice(0, starters).forEach((p, i) => lines.push(`${i + 1}. ${p}${payMark(p)}`))
+    team.players.slice(0, starters).forEach((p, i) => lines.push(`${i + 1}. ${tag(p)}`))
     const subs = team.players.slice(starters)
     if (subs.length > 0) {
-      lines.push(`🔁 Subs (on first → last): ${subs.map((p) => `${p}${payMark(p)}`).join(', ')}`)
+      lines.push(`🔁 Subs (on first → last): ${subs.map(tag).join(', ')}`)
     }
     lines.push('')
   }

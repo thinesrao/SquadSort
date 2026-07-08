@@ -11,28 +11,30 @@ Built with **Vite + React + TypeScript**, **Tailwind CSS v4**, and **Lucide** ic
 
 The app flows through four thumb-reachable tabs:
 
-1. **Roster** — Paste the WhatsApp list. A robust parser strips zero-width /
-   hidden formatting characters, ignores date/time/location header lines, keeps
-   only numbered player lines, and shows a live player count.
-2. **Setup** — Chunky steppers for **Target team size** (default 7) and **Number
-   of teams** (default 3), a live split preview, and a **Squad pool** where you
-   can tap a player to **bench / exclude** them (late dropouts) and re-generate
-   with the new count.
-3. **Teams** — Randomized teams with fixed colors (**White**, **Black**, **Red**,
-   …) shown as compact side-by-side columns, the match schedule with borrow
-   notes, and two share options: **Copy text** (paste-ready WhatsApp block) and
-   **Share image** (a ~square rendered PNG, laid out White | Black over
-   Red | Schedule so WhatsApp doesn't crop it, sent via the native share sheet
-   with a download fallback). **Long-press a player to drag** them to another
-   team — drop on a player to swap, or on empty space to move.
-4. **Timer** — Big countdown ring, presets (5/8/10/12m), fine adjust, auto-repeat
-   rounds, a loud Web-Audio chime at zero, and screen Wake Lock to keep the phone
-   awake while running.
+1. **Roster** — Paste the WhatsApp list (robust parser strips hidden characters
+   and header lines), then **edit it directly**: add, rename, or remove players.
+   Toggle **star ratings** (hidden by default) and **goalkeeper** flags per
+   player; ratings are remembered by name across weeks.
+2. **Setup** — Steppers for team size / count with a game-rule recommendation
+   (**≤18 → 2 teams**, **≥19 → 3 teams**), **Skill balancing** and **Rolling
+   subs** toggles, a **Squad pool** to bench late dropouts, and **Pairings**
+   (keep two players **together** or **apart**).
+3. **Teams** — Colored teams shown as side-by-side columns with **GK markers**, a
+   **★ strength/balance** readout, and rolling-sub benches. Long-press to
+   drag/swap, tap the coin to mark **paid**, and export via **Copy text**,
+   **Share image** (~square PNG with the logo), or a backend-free **share link**.
+4. **Timer** — Countdown ring, presets, auto-repeat, screen Wake Lock, **Jumbo**
+   landscape mode, a **referee full-time whistle** + red/black flash alarm, and a
+   **live scoreboard**: the current fixture with ± counters, **auto-advance** on
+   the whistle, and optional **spoken matchup** announcements.
 
-Pitch-side touches: **haptic feedback** (`navigator.vibrate`) on team generation
-and a heavy buzz when the timer hits 0:00, and an installable **PWA** (web
-manifest + icons) so it can live on your home screen. State persists across tab
-switches and page refreshes (localStorage).
+Balancing lives in `buildTeams`: sizing (rolling-subs even split or sequential
+borrow) → goalkeeper pre-seed (one per team) → skill snake-draft → keep-together
+/ keep-apart repair.
+
+Pitch-side touches: **offline PWA** (service worker) so it loads with no signal,
+**haptic feedback**, and installable to the home screen. State persists across
+tab switches and refreshes (localStorage).
 
 ## The sorting algorithm (sequential fill)
 

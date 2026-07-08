@@ -171,6 +171,7 @@ function drawTeamCard(
   w: number,
   team: Team,
   paid?: Set<string>,
+  gks?: Set<string>,
 ) {
   const trackPay = !!paid && paid.size > 0
   const h = teamCardHeight(team)
@@ -236,7 +237,8 @@ function drawTeamCard(
     ctx.textAlign = 'left'
     ctx.fillStyle = isSub ? MUTED : NAME_COLOR
     ctx.font = font(30, 500)
-    const label = isSub ? `S${i - starters + 1}. ${name}` : `${i + 1}. ${name}`
+    const gkTag = gks?.has(name) ? '🧤 ' : ''
+    const label = isSub ? `S${i - starters + 1}. ${gkTag}${name}` : `${i + 1}. ${gkTag}${name}`
     ctx.fillText(truncate(ctx, label, nameMax), x + 44, ny)
     if (trackPay) {
       const isPaid = paid!.has(name)
@@ -341,6 +343,7 @@ function renderCanvas(
   schedule: Match[],
   settings: Settings,
   paid?: Set<string>,
+  gks?: Set<string>,
 ): HTMLCanvasElement {
   const contentW = W - PAD * 2
   const cardW = (contentW - GAP) / 2
@@ -405,7 +408,7 @@ function renderCanvas(
   let y = PAD + TITLE_BLOCK
   for (const row of rows) {
     for (const cell of row.cells) {
-      if (cell.type === 'team') drawTeamCard(ctx, cell.x, y, cell.w, cell.team, paid)
+      if (cell.type === 'team') drawTeamCard(ctx, cell.x, y, cell.w, cell.team, paid, gks)
       else drawScheduleBlock(ctx, cell.x, y, cell.w, teams, schedule)
     }
     y += row.h + GAP
@@ -437,10 +440,11 @@ export async function shareTeamsImage(
   schedule: Match[],
   settings: Settings,
   paid?: Set<string>,
+  gks?: Set<string>,
 ): Promise<ShareOutcome> {
   if (teams.length === 0) return 'failed'
 
-  const canvas = renderCanvas(teams, schedule, settings, paid)
+  const canvas = renderCanvas(teams, schedule, settings, paid, gks)
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
   if (!blob) return 'failed'
 
