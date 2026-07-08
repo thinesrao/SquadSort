@@ -1,4 +1,5 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
+import { CircleDollarSign } from 'lucide-react'
 import type { Team } from '../types'
 
 interface TeamCardProps {
@@ -7,10 +8,20 @@ interface TeamCardProps {
   onPlayerPointerDown?: (e: ReactPointerEvent, teamId: number, index: number, name: string) => void
   activeKey?: string | null // "teamId:index" currently being dragged
   isOver?: boolean // this column is the current drop target
+  /** Payment tracking (Teams view). */
+  isPaid?: (name: string) => boolean
+  onTogglePaid?: (name: string) => void
 }
 
 /** Compact team column for the multi-up grid on the Teams view. */
-export function TeamCard({ team, onPlayerPointerDown, activeKey, isOver }: TeamCardProps) {
+export function TeamCard({
+  team,
+  onPlayerPointerDown,
+  activeKey,
+  isOver,
+  isPaid,
+  onTogglePaid,
+}: TeamCardProps) {
   const { color, players } = team
   const draggable = !!onPlayerPointerDown
 
@@ -36,6 +47,7 @@ export function TeamCard({ team, onPlayerPointerDown, activeKey, isOver }: TeamC
         {players.map((name, i) => {
           const key = `${team.id}:${i}`
           const isDragging = activeKey === key
+          const paid = isPaid?.(name) ?? false
           return (
             <li
               key={`${name}-${i}`}
@@ -44,14 +56,28 @@ export function TeamCard({ team, onPlayerPointerDown, activeKey, isOver }: TeamC
                 draggable ? (e) => onPlayerPointerDown?.(e, team.id, i, name) : undefined
               }
               onContextMenu={draggable ? (e) => e.preventDefault() : undefined}
-              className={`flex items-baseline gap-1 rounded text-sm leading-tight ${
+              className={`flex items-center gap-1 rounded text-sm leading-tight ${
                 draggable ? 'cursor-grab touch-none select-none py-0.5 active:cursor-grabbing' : ''
               } ${isDragging ? 'opacity-30' : ''}`}
             >
               <span className="w-4 shrink-0 text-right text-[10px] tabular-nums text-zinc-500">
                 {i + 1}
               </span>
-              <span className="truncate text-zinc-100">{name}</span>
+              <span className="min-w-0 flex-1 truncate text-zinc-100">{name}</span>
+              {onTogglePaid && (
+                <button
+                  type="button"
+                  aria-label={`${name} ${paid ? 'paid' : 'unpaid'}`}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => onTogglePaid(name)}
+                  className="shrink-0 p-0.5 active:scale-90"
+                >
+                  <CircleDollarSign
+                    className={`h-4 w-4 ${paid ? 'text-emerald-400' : 'text-zinc-600'}`}
+                    strokeWidth={2.25}
+                  />
+                </button>
+              )}
             </li>
           )
         })}

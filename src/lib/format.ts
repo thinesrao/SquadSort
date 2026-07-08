@@ -26,14 +26,18 @@ export function formatForWhatsApp(
   teams: Team[],
   schedule: Match[],
   settings: Settings,
+  paid?: Set<string>,
 ): string {
+  const trackPay = !!paid && paid.size > 0
+  const payMark = (name: string) => (trackPay ? (paid!.has(name) ? ' ✅' : ' ❌') : '')
+
   const lines: string[] = []
   lines.push('⚽ *SquadSort Teams* ⚽')
   lines.push('')
 
   for (const team of teams) {
     lines.push(`${team.color.emoji} *Team ${team.color.name}* (${team.players.length})`)
-    team.players.forEach((p, i) => lines.push(`${i + 1}. ${p}`))
+    team.players.forEach((p, i) => lines.push(`${i + 1}. ${p}${payMark(p)}`))
     lines.push('')
   }
 
@@ -51,5 +55,6 @@ export function formatForWhatsApp(
   }
 
   lines.push(`👥 ${teams.reduce((n, t) => n + t.players.length, 0)} players · target ${settings.targetSize}-a-side`)
+  if (trackPay) lines.push('💸 ✅ paid · ❌ still owes')
   return lines.join('\n').trim()
 }

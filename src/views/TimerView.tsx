@@ -1,5 +1,7 @@
-import { Timer as TimerIcon, Play, Pause, RotateCcw, Repeat, Minus, Plus } from 'lucide-react'
+import { useState } from 'react'
+import { Timer as TimerIcon, Play, Pause, RotateCcw, Repeat, Minus, Plus, Maximize } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
+import { useWakeLock } from '../hooks/useWakeLock'
 import { TIMER_PRESETS_SECONDS } from '../constants'
 import type { TimerController } from '../hooks/useTimer'
 
@@ -31,14 +33,82 @@ export function TimerView({ timer }: TimerViewProps) {
     setDuration,
   } = timer
 
+  const [jumbo, setJumbo] = useState(false)
+  // Keep the screen awake while the timer runs OR while in jumbo mode.
+  useWakeLock(running || jumbo)
+
   const progress = duration > 0 ? remaining / duration : 0
   const almostDone = remaining <= 10 && remaining > 0 && running
   const ringColor = almostDone ? '#f59e0b' : '#34d399'
 
   const adjust = (delta: number) => setDuration(Math.max(30, Math.min(60 * 60, duration + delta)))
 
+  const enterJumbo = async () => {
+    setJumbo(true)
+    try {
+      await document.documentElement.requestFullscreen?.()
+    } catch {
+      /* fullscreen not allowed — CSS rotation still gives landscape */
+    }
+    try {
+      const orient = screen.orientation as unknown as { lock?: (o: string) => Promise<void> }
+      await orient.lock?.('landscape')
+    } catch {
+      /* orientation lock unsupported */
+    }
+  }
+
+  const exitJumbo = async () => {
+    setJumbo(false)
+    try {
+      const orient = screen.orientation as unknown as { unlock?: () => void }
+      orient.unlock?.()
+    } catch {
+      /* ignore */
+    }
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen?.()
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (jumbo) {
+    return (
+      <div
+        onClick={exitJumbo}
+        className="fixed inset-0 z-[90] flex items-center justify-center bg-black"
+      >
+        <span
+          className={`font-black tabular-nums ${almostDone ? 'text-amber-400' : 'text-emerald-400'}`}
+          style={{ transform: 'rotate(90deg)', fontSize: 'min(42vh, 62vw)', lineHeight: 1 }}
+        >
+          {fmt(remaining)}
+        </span>
+        <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs uppercase tracking-widest text-zinc-600">
+          tap to exit
+        </span>
+      </div>
+    )
+  }
+
   return (
-    <ViewShell title="Match Timer" subtitle="Interval timer with chime" icon={TimerIcon}>
+    <ViewShell
+      title="Match Timer"
+      subtitle="Interval timer with alarm"
+      icon={TimerIcon}
+      action={
+        <button
+          type="button"
+          onClick={enterJumbo}
+          aria-label="Jumbo fullscreen timer"
+          className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 active:scale-95"
+        >
+          <Maximize className="h-3.5 w-3.5" />
+          Jumbo
+        </button>
+      }
+    >
       <div className="flex min-h-0 flex-1 flex-col items-center justify-between gap-3 py-1">
         {/* Countdown ring */}
         <div className="relative grid place-items-center">

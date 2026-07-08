@@ -27,7 +27,7 @@ const NAME_COLOR = '#e4e4e7'
 const AMBER = '#fbbf24'
 const ACCENT = '#34d399'
 
-const TITLE_BLOCK = 150
+const TITLE_BLOCK = 190
 const FOOTER = 84
 const HEADER_H = 92
 const NAME_LINE = 48
@@ -126,6 +126,22 @@ function drawJersey(
   ctx.stroke()
 }
 
+/** Mini SquadSort logo: three overlapping kit jerseys + neon frame. */
+function drawLogoMark(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
+  ctx.fillStyle = '#111116'
+  roundRect(ctx, x, y, s, s, s * 0.22)
+  ctx.fill()
+  const jw = s * 0.42
+  const jh = s * 0.46
+  drawJersey(ctx, x + s * 0.05, y + s * 0.32, jw, jh, '#e5352b')
+  drawJersey(ctx, x + s * 0.53, y + s * 0.32, jw, jh, '#f5f5f5')
+  drawJersey(ctx, x + s * 0.29, y + s * 0.2, jw, jh, '#0f0f13')
+  ctx.lineWidth = Math.max(2, s * 0.05)
+  ctx.strokeStyle = '#00ff87'
+  roundRect(ctx, x + s * 0.06, y + s * 0.06, s * 0.88, s * 0.88, s * 0.17)
+  ctx.stroke()
+}
+
 function truncate(ctx: CanvasRenderingContext2D, text: string, maxW: number): string {
   if (ctx.measureText(text).width <= maxW) return text
   let t = text
@@ -143,7 +159,15 @@ function scheduleHeight(schedule: Match[]): number {
   return h
 }
 
-function drawTeamCard(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, team: Team) {
+function drawTeamCard(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  team: Team,
+  paid?: Set<string>,
+) {
+  const trackPay = !!paid && paid.size > 0
   const h = teamCardHeight(team)
   ctx.fillStyle = CARD
   roundRect(ctx, x, y, w, h, 20)
@@ -183,12 +207,22 @@ function drawTeamCard(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
   ctx.stroke()
 
   // Players (single column within the half-width card)
+  const nameMax = w - 72 - (trackPay ? 34 : 0)
   team.players.forEach((name, i) => {
     const ny = y + HEADER_H + i * NAME_LINE + 34
     dot(ctx, x + 26, ny - 10, 7, team.color.dotHex)
+    ctx.textAlign = 'left'
     ctx.fillStyle = NAME_COLOR
     ctx.font = font(30, 500)
-    ctx.fillText(truncate(ctx, `${i + 1}. ${name}`, w - 72), x + 44, ny)
+    ctx.fillText(truncate(ctx, `${i + 1}. ${name}`, nameMax), x + 44, ny)
+    if (trackPay) {
+      const isPaid = paid!.has(name)
+      ctx.textAlign = 'center'
+      ctx.font = font(26, 800)
+      ctx.fillStyle = isPaid ? '#34d399' : '#fbbf24'
+      ctx.fillText(isPaid ? '✓' : '✗', x + w - 24, ny)
+      ctx.textAlign = 'left'
+    }
   })
 }
 
@@ -278,7 +312,12 @@ interface Row {
   h: number
 }
 
-function renderCanvas(teams: Team[], schedule: Match[], settings: Settings): HTMLCanvasElement {
+function renderCanvas(
+  teams: Team[],
+  schedule: Match[],
+  settings: Settings,
+  paid?: Set<string>,
+): HTMLCanvasElement {
   const contentW = W - PAD * 2
   const cardW = (contentW - GAP) / 2
   const rightX = PAD + cardW + GAP
@@ -321,25 +360,28 @@ function renderCanvas(teams: Team[], schedule: Match[], settings: Settings): HTM
   ctx.fillStyle = BG
   ctx.fillRect(0, 0, W, height)
 
-  // Title
+  // Title — logo mark + wordmark
+  const logoS = 56
+  drawLogoMark(ctx, PAD, PAD, logoS)
   ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
+  ctx.textBaseline = 'middle'
   ctx.fillStyle = ACCENT
-  ctx.font = font(28, 700)
-  ctx.fillText('⚽ SQUADSORT', PAD, PAD + 28)
+  ctx.font = font(32, 800)
+  ctx.fillText('SQUADSORT', PAD + logoS + 18, PAD + logoS / 2)
+  ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = TITLE
-  ctx.font = font(60, 800)
-  ctx.fillText('Team Line-ups', PAD, PAD + 92)
+  ctx.font = font(58, 800)
+  ctx.fillText('Team Line-ups', PAD, PAD + logoS + 62)
   ctx.fillStyle = MUTED
   ctx.font = font(28, 500)
   const total = teams.reduce((n, t) => n + t.players.length, 0)
-  ctx.fillText(`${total} players · ${settings.targetSize}-a-side`, PAD, PAD + 132)
+  ctx.fillText(`${total} players · ${settings.targetSize}-a-side`, PAD, PAD + logoS + 102)
 
   // Rows
   let y = PAD + TITLE_BLOCK
   for (const row of rows) {
     for (const cell of row.cells) {
-      if (cell.type === 'team') drawTeamCard(ctx, cell.x, y, cell.w, cell.team)
+      if (cell.type === 'team') drawTeamCard(ctx, cell.x, y, cell.w, cell.team, paid)
       else drawScheduleBlock(ctx, cell.x, y, cell.w, teams, schedule)
     }
     y += row.h + GAP
@@ -370,10 +412,11 @@ export async function shareTeamsImage(
   teams: Team[],
   schedule: Match[],
   settings: Settings,
+  paid?: Set<string>,
 ): Promise<ShareOutcome> {
   if (teams.length === 0) return 'failed'
 
-  const canvas = renderCanvas(teams, schedule, settings)
+  const canvas = renderCanvas(teams, schedule, settings, paid)
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
   if (!blob) return 'failed'
 

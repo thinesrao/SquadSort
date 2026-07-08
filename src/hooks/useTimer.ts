@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { playChime, primeAudio } from '../lib/audio'
+import { playBuzzer, primeAudio, startAlarm, stopAlarm as stopAudioAlarm } from '../lib/audio'
 import { vibrate, HAPTIC } from '../lib/haptics'
 
 export interface TimerController {
@@ -8,17 +8,20 @@ export interface TimerController {
   running: boolean
   round: number // increments each completed interval when auto-repeating
   autoRepeat: boolean
+  alarming: boolean // time's up, alarm is blaring until dismissed
   setAutoRepeat: (v: boolean) => void
   start: () => void
   pause: () => void
   reset: () => void
+  stopAlarm: () => void
   setDuration: (seconds: number) => void
 }
 
 /**
  * Countdown interval timer. Uses an absolute end timestamp so it stays accurate
- * even when the tab is throttled in the background. Plays a chime at zero and,
- * if auto-repeat is on, immediately starts the next interval and bumps `round`.
+ * even when the tab is throttled in the background. When an interval ends it
+ * either rolls straight into the next round (auto-repeat) or raises a blaring
+ * alarm that keeps sounding/vibrating until `stopAlarm()` is called.
  */
 export function useTimer(initialSeconds: number): TimerController {
   const [duration, setDurationState] = useState(initialSeconds)
@@ -26,6 +29,7 @@ export function useTimer(initialSeconds: number): TimerController {
   const [running, setRunning] = useState(false)
   const [round, setRound] = useState(1)
   const [autoRepeat, setAutoRepeat] = useState(false)
+  const [alarming, setAlarming] = useState(false)
 
   const endAtRef = useRef<number | null>(null)
   const durationRef = useRef(duration)
@@ -33,6 +37,7 @@ export function useTimer(initialSeconds: number): TimerController {
   const autoRepeatRef = useRef(autoRepeat)
   autoRepeatRef.current = autoRepeat
 
+  // Countdown tick.
   useEffect(() => {
     if (!running) return
     const tick = () => {
@@ -42,10 +47,10 @@ export function useTimer(initialSeconds: number): TimerController {
         setRemaining(rem)
         return
       }
-      // Interval elapsed.
-      playChime()
-      vibrate(HAPTIC.alarm)
       if (autoRepeatRef.current) {
+        // Roll into the next round with a quick buzz.
+        playBuzzer()
+        vibrate(HAPTIC.alarm)
         setRound((r) => r + 1)
         endAtRef.current = Date.now() + durationRef.current * 1000
         setRemaining(durationRef.current)
@@ -53,14 +58,31 @@ export function useTimer(initialSeconds: number): TimerController {
         endAtRef.current = null
         setRemaining(0)
         setRunning(false)
+        setAlarming(true)
       }
     }
     const id = window.setInterval(tick, 250)
     return () => window.clearInterval(id)
   }, [running])
 
+  // Blaring alarm: loop the klaxon + aggressive vibration until dismissed.
+  useEffect(() => {
+    if (!alarming) return
+    startAlarm()
+    vibrate(HAPTIC.alarm)
+    const buzz = window.setInterval(() => vibrate(HAPTIC.alarm), 5300)
+    return () => {
+      window.clearInterval(buzz)
+      stopAudioAlarm()
+      vibrate(0)
+    }
+  }, [alarming])
+
+  const stopAlarm = useCallback(() => setAlarming(false), [])
+
   const start = useCallback(() => {
     primeAudio()
+    setAlarming(false)
     const secs = remaining > 0 ? remaining : durationRef.current
     if (remaining <= 0) setRemaining(durationRef.current)
     endAtRef.current = Date.now() + secs * 1000
@@ -74,6 +96,7 @@ export function useTimer(initialSeconds: number): TimerController {
 
   const reset = useCallback(() => {
     setRunning(false)
+    setAlarming(false)
     endAtRef.current = null
     setRemaining(durationRef.current)
     setRound(1)
@@ -81,6 +104,7 @@ export function useTimer(initialSeconds: number): TimerController {
 
   const setDuration = useCallback((seconds: number) => {
     setRunning(false)
+    setAlarming(false)
     endAtRef.current = null
     setDurationState(seconds)
     setRemaining(seconds)
@@ -93,10 +117,12 @@ export function useTimer(initialSeconds: number): TimerController {
     running,
     round,
     autoRepeat,
+    alarming,
     setAutoRepeat,
     start,
     pause,
     reset,
+    stopAlarm,
     setDuration,
   }
 }

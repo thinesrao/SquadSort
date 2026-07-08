@@ -39,6 +39,21 @@ body {
   animation: view-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Violent red/black flash for the "time's up" alarm. */
+@keyframes alarm-flash {
+  0%,
+  49% {
+    background-color: #dc2626;
+  }
+  50%,
+  100% {
+    background-color: #0a0a0a;
+  }
+}
+.animate-alarm-flash {
+  animation: alarm-flash 0.5s steps(1, end) infinite;
+}
+
 /* Hide number-input spinners for the chunky steppers. */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button {

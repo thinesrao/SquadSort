@@ -5,12 +5,13 @@ import { usePersistentState } from './hooks/usePersistentState'
 import { useTimer } from './hooks/useTimer'
 import { useWakeLock } from './hooks/useWakeLock'
 import { BottomNav } from './components/BottomNav'
+import { AlarmOverlay } from './components/AlarmOverlay'
 import { RosterView } from './views/RosterView'
 import { SettingsView } from './views/SettingsView'
 import { ResultView } from './views/ResultView'
 import { TimerView } from './views/TimerView'
 import { parsePlayers } from './lib/parser'
-import { generateTeams } from './lib/teamGenerator'
+import { generateTeams, generateBalancedTeams } from './lib/teamGenerator'
 import { generateSchedule } from './lib/schedule'
 import { vibrate, HAPTIC } from './lib/haptics'
 import { DEFAULT_SETTINGS, DEFAULT_TIMER_SECONDS } from './constants'
@@ -21,6 +22,9 @@ export default function App() {
   const [rawInput, setRawInput] = usePersistentState<string>('ss.raw', '')
   const [settings, setSettings] = usePersistentState<Settings>('ss.settings', DEFAULT_SETTINGS)
   const [benchedList, setBenchedList] = usePersistentState<string[]>('ss.benched', [])
+  const [ratings, setRatings] = usePersistentState<Record<string, number>>('ss.ratings', {})
+  const [balancing, setBalancing] = usePersistentState<boolean>('ss.balance', false)
+  const [paidList, setPaidList] = usePersistentState<string[]>('ss.paid', [])
   const [teams, setTeams] = usePersistentState<Team[]>('ss.teams', [])
   const [schedule, setSchedule] = usePersistentState<Match[]>('ss.schedule', [])
 
@@ -33,26 +37,35 @@ export default function App() {
     () => players.filter((p) => !benched.has(p)),
     [players, benched],
   )
+  const paid = useMemo(() => new Set(paidList), [paidList])
+
+  // Ratings persist across sessions and auto-apply to recognized names.
+  const ratingOf = (name: string) => ratings[name] ?? 2
 
   const toggleBench = (name: string) =>
     setBenchedList((prev) =>
       prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name],
     )
+  const setRating = (name: string, value: number) =>
+    setRatings((prev) => ({ ...prev, [name]: value }))
+  const togglePaid = (name: string) =>
+    setPaidList((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]))
 
   // Timer state lives at the top level so it keeps running across tab switches.
   const timer = useTimer(DEFAULT_TIMER_SECONDS)
   useWakeLock(timer.running)
 
   const generate = () => {
-    const t = generateTeams(activePlayers, settings.teamCount, settings.targetSize)
+    const t = balancing
+      ? generateBalancedTeams(activePlayers, ratingOf, settings.teamCount, settings.targetSize)
+      : generateTeams(activePlayers, settings.teamCount, settings.targetSize)
     setTeams(t)
     setSchedule(generateSchedule(t, settings.targetSize))
     vibrate(HAPTIC.success)
     setView('result')
   }
 
-  // Manual edit (drag swap / move): persist new teams and refresh the schedule
-  // so borrow notes stay accurate if sizes changed.
+  // Manual edit (drag swap / move): persist new teams and refresh the schedule.
   const editTeams = (next: Team[]) => {
     setTeams(next)
     setSchedule(generateSchedule(next, settings.targetSize))
@@ -66,6 +79,8 @@ export default function App() {
             rawInput={rawInput}
             onChangeRaw={setRawInput}
             players={players}
+            ratingOf={ratingOf}
+            onRate={setRating}
             onContinue={() => setView('settings')}
           />
         )
@@ -78,6 +93,8 @@ export default function App() {
             benched={benched}
             onToggleBench={toggleBench}
             activeCount={activePlayers.length}
+            balancing={balancing}
+            onToggleBalancing={setBalancing}
             onGenerate={generate}
           />
         )
@@ -87,6 +104,8 @@ export default function App() {
             teams={teams}
             schedule={schedule}
             settings={settings}
+            paid={paid}
+            onTogglePaid={togglePaid}
             onRegenerate={generate}
             onEditTeams={editTeams}
             onGoToSetup={() => setView('settings')}
@@ -103,6 +122,7 @@ export default function App() {
         {renderView()}
       </main>
       <BottomNav active={view} onChange={setView} resultReady={teams.length > 0} />
+      {timer.alarming && <AlarmOverlay onStop={timer.stopAlarm} />}
       {/* Vercel Web Analytics — collects page views in production, no-ops locally. */}
       <Analytics />
       {/* Vercel Speed Insights — collects performance metrics in production, no-ops locally. */}

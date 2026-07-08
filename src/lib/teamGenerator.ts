@@ -52,6 +52,60 @@ export function generateTeams(
   return teams
 }
 
+export type RatingFn = (name: string) => number
+
+/**
+ * Skill-balanced generation. Buckets players into 3/2/1-star tiers, shuffles
+ * within each tier, then snake-drafts them across the teams (A,B,C,C,B,A,…) so
+ * the strongest players are spread evenly. Still respects the sequential-fill
+ * target sizes (e.g. 19 / 7 / 3 → a *balanced* 7-7-5), by skipping any team
+ * that has already reached its capacity.
+ */
+export function generateBalancedTeams(
+  players: Player[],
+  ratingOf: RatingFn,
+  teamCount: number,
+  targetSize: number,
+  rng: () => number = Math.random,
+): Team[] {
+  const caps = previewTeamSizes(players.length, teamCount, targetSize)
+  const buckets: Record<1 | 2 | 3, Player[]> = { 1: [], 2: [], 3: [] }
+  for (const p of players) {
+    const r = Math.min(3, Math.max(1, Math.round(ratingOf(p)))) as 1 | 2 | 3
+    buckets[r].push(p)
+  }
+  const ordered = [
+    ...fisherYatesShuffle(buckets[3], rng),
+    ...fisherYatesShuffle(buckets[2], rng),
+    ...fisherYatesShuffle(buckets[1], rng),
+  ]
+
+  const rosters: Player[][] = Array.from({ length: teamCount }, () => [])
+  let i = 0
+  let dir = 1
+  const nextIndex = () => {
+    const t = i
+    i += dir
+    if (i >= teamCount) {
+      i = teamCount - 1
+      dir = -1
+    } else if (i < 0) {
+      i = 0
+      dir = 1
+    }
+    return t
+  }
+
+  for (const p of ordered) {
+    let t = nextIndex()
+    let guard = 0
+    while (rosters[t].length >= caps[t] && guard++ < teamCount * 4) t = nextIndex()
+    rosters[t].push(p)
+  }
+
+  return rosters.map((pl, idx) => ({ id: idx, color: colorForIndex(idx), players: pl }))
+}
+
 /**
  * Preview the team sizes for a given roster count without shuffling — used to
  * show the split on the Settings screen before generating.

@@ -12,6 +12,8 @@ interface ResultViewProps {
   teams: Team[]
   schedule: Match[]
   settings: Settings
+  paid: Set<string>
+  onTogglePaid: (name: string) => void
   onRegenerate: () => void
   onEditTeams: (next: Team[]) => void
   onGoToSetup: () => void
@@ -73,6 +75,8 @@ export function ResultView({
   teams,
   schedule,
   settings,
+  paid,
+  onTogglePaid,
   onRegenerate,
   onEditTeams,
   onGoToSetup,
@@ -90,7 +94,7 @@ export function ResultView({
   }
 
   const handleCopy = async () => {
-    const ok = await copyText(formatForWhatsApp(teams, schedule, settings))
+    const ok = await copyText(formatForWhatsApp(teams, schedule, settings, paid))
     if (ok) {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1800)
@@ -100,7 +104,7 @@ export function ResultView({
   const handleShareImage = async () => {
     setImgState('working')
     try {
-      await shareTeamsImage(teams, schedule, settings)
+      await shareTeamsImage(teams, schedule, settings, paid)
       setImgState('done')
       window.setTimeout(() => setImgState('idle'), 1800)
     } catch {
@@ -134,12 +138,14 @@ export function ResultView({
               onPlayerPointerDown={startDrag}
               activeKey={activeKey}
               isOver={dragging && overTeamId === team.id}
+              isPaid={(n) => paid.has(n)}
+              onTogglePaid={onTogglePaid}
             />
           ))}
         </div>
 
         <p className="-mt-1 flex shrink-0 items-center justify-center gap-1.5 text-[11px] text-zinc-500">
-          <Hand className="h-3.5 w-3.5" /> Long-press a player to move or swap
+          <Hand className="h-3.5 w-3.5" /> Long-press to move · tap 💲 to mark paid
         </p>
 
         {/* Schedule */}

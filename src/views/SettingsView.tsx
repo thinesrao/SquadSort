@@ -1,4 +1,4 @@
-import { SlidersHorizontal, Shuffle, AlertTriangle, UserMinus } from 'lucide-react'
+import { SlidersHorizontal, Shuffle, AlertTriangle, UserMinus, Scale } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { Stepper } from '../components/Stepper'
 import { previewTeamSizes } from '../lib/teamGenerator'
@@ -13,6 +13,8 @@ interface SettingsViewProps {
   benched: Set<string> // excluded from the active pool
   onToggleBench: (name: string) => void
   activeCount: number // players.length minus benched
+  balancing: boolean
+  onToggleBalancing: (v: boolean) => void
   onGenerate: () => void
 }
 
@@ -23,6 +25,8 @@ export function SettingsView({
   benched,
   onToggleBench,
   activeCount,
+  balancing,
+  onToggleBalancing,
   onGenerate,
 }: SettingsViewProps) {
   const { targetSize, teamCount } = settings
@@ -40,6 +44,39 @@ export function SettingsView({
   return (
     <ViewShell title="Setup" subtitle="How should teams be built?" icon={SlidersHorizontal}>
       <div className="flex min-h-0 flex-1 flex-col gap-3">
+        {/* Skill balancing master toggle */}
+        <button
+          type="button"
+          onClick={() => {
+            vibrate(HAPTIC.tap)
+            onToggleBalancing(!balancing)
+          }}
+          className={`flex shrink-0 items-center justify-between rounded-2xl border px-4 py-3 transition active:scale-[0.98] ${
+            balancing ? 'border-emerald-500/40 bg-emerald-500/10' : 'border-zinc-800 bg-zinc-900'
+          }`}
+        >
+          <span className="flex items-center gap-3 text-sm font-semibold text-zinc-100">
+            <Scale className={`h-5 w-5 ${balancing ? 'text-emerald-400' : 'text-zinc-500'}`} />
+            <span className="text-left">
+              Skill balancing
+              <span className="block text-[11px] font-normal text-zinc-500">
+                Spread ⭐ ratings evenly (snake draft)
+              </span>
+            </span>
+          </span>
+          <span
+            className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+              balancing ? 'bg-emerald-500' : 'bg-zinc-700'
+            }`}
+          >
+            <span
+              className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-all ${
+                balancing ? 'left-6' : 'left-1'
+              }`}
+            />
+          </span>
+        </button>
+
         <div className="flex gap-3">
           <div className="flex-1">
             <Stepper

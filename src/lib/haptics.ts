@@ -27,5 +27,5 @@ export const HAPTIC: {
   tap: 12, // light UI tap
   pickup: 25, // drag pick-up
   success: [28, 40, 28], // teams generated
-  alarm: [400, 150, 400, 150, 400, 150, 600], // heavy, repeating: timer done
+  alarm: [800, 200, 800, 200, 800, 200, 1500], // aggressive, pulsing: timer done
 }

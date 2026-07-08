@@ -1,5 +1,6 @@
-import { ClipboardList, ArrowRight, Trash2, Users, FileText } from 'lucide-react'
+import { ClipboardList, ArrowRight, Trash2, FileText } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
+import { StarRating } from '../components/StarRating'
 
 const SAMPLE = `⚽ Futsal — 09 July 2026
 8-9pm @ The Cage
@@ -29,15 +30,25 @@ interface RosterViewProps {
   rawInput: string
   onChangeRaw: (v: string) => void
   players: string[]
+  ratingOf: (name: string) => number
+  onRate: (name: string, value: number) => void
   onContinue: () => void
 }
 
-export function RosterView({ rawInput, onChangeRaw, players, onContinue }: RosterViewProps) {
+export function RosterView({
+  rawInput,
+  onChangeRaw,
+  players,
+  ratingOf,
+  onRate,
+  onContinue,
+}: RosterViewProps) {
   return (
     <ViewShell
-      title="Roster"
+      title="SquadSort"
       subtitle="Paste the WhatsApp list"
       icon={ClipboardList}
+      logoSrc="/logo.svg"
       action={
         <>
           <button
@@ -66,43 +77,38 @@ export function RosterView({ rawInput, onChangeRaw, players, onContinue }: Roste
           onChange={(e) => onChangeRaw(e.target.value)}
           placeholder={'Paste your WhatsApp list here…\n\n1. Danny\n2. Marcus\n3. Leo'}
           spellCheck={false}
-          className="min-h-24 flex-1 resize-none rounded-2xl border border-zinc-800 bg-zinc-900 p-3.5 font-mono text-sm leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+          className="h-28 shrink-0 resize-none rounded-2xl border border-zinc-800 bg-zinc-900 p-3.5 font-mono text-sm leading-relaxed text-zinc-100 placeholder:text-zinc-600 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
         />
 
         {players.length > 0 && (
-          <div className="max-h-24 shrink-0 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-900/60 p-2">
-            <div className="flex flex-wrap gap-1.5">
-              {players.map((name, i) => (
-                <span
-                  key={`${name}-${i}`}
-                  className="inline-flex items-center gap-1 rounded-full bg-zinc-800 px-2 py-1 text-xs text-zinc-200"
-                >
-                  <span className="text-[10px] font-semibold text-zinc-500">{i + 1}</span>
-                  {name}
-                </span>
-              ))}
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900/60">
+            <div className="flex items-center justify-between px-3 pb-1 pt-2 text-[11px] font-semibold text-zinc-500">
+              <span>{players.length} players</span>
+              <span>skill ⭐</span>
             </div>
+            <ul className="divide-y divide-zinc-800/70">
+              {players.map((name, i) => (
+                <li key={`${name}-${i}`} className="flex items-center gap-2 px-3 py-2">
+                  <span className="w-5 shrink-0 text-right text-xs tabular-nums text-zinc-500">
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-zinc-100">{name}</span>
+                  <StarRating value={ratingOf(name)} onChange={(v) => onRate(name, v)} />
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 
-        <div className="flex shrink-0 items-center gap-3">
-          <div className="flex flex-1 items-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5">
-            <Users className="h-5 w-5 text-emerald-300" />
-            <span className="text-sm font-medium text-emerald-200">Players</span>
-            <span className="ml-auto text-2xl font-black tabular-nums text-emerald-400">
-              {players.length}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onContinue}
-            disabled={players.length < 2}
-            className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 px-5 py-3.5 text-base font-bold text-emerald-950 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
-          >
-            Setup
-            <ArrowRight className="h-5 w-5" />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onContinue}
+          disabled={players.length < 2}
+          className="flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-4 text-lg font-bold text-emerald-950 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+        >
+          Continue to Setup
+          <ArrowRight className="h-5 w-5" />
+        </button>
       </div>
     </ViewShell>
   )
