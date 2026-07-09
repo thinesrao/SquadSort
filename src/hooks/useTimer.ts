@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { playBuzzer, primeAudio, startAlarm, stopAlarm as stopAudioAlarm } from '../lib/audio'
+import { playRoundWhistle, primeAudio, startAlarm, stopAlarm as stopAudioAlarm } from '../lib/audio'
 import { vibrate, HAPTIC } from '../lib/haptics'
 
 export interface TimerController {
@@ -48,8 +48,8 @@ export function useTimer(initialSeconds: number): TimerController {
         return
       }
       if (autoRepeatRef.current) {
-        // Roll into the next round with a quick buzz.
-        playBuzzer()
+        // Roll into the next round with a quick whistle.
+        playRoundWhistle()
         vibrate(HAPTIC.alarm)
         setRound((r) => r + 1)
         endAtRef.current = Date.now() + durationRef.current * 1000

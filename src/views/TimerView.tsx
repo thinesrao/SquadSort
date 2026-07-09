@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { useWakeLock } from '../hooks/useWakeLock'
+import { testAlarm } from '../lib/audio'
 import { TIMER_PRESETS_SECONDS } from '../constants'
 import type { TimerController } from '../hooks/useTimer'
 import type { Match, Team } from '../types'
@@ -133,9 +134,13 @@ export function TimerView({
   const ringColor = almostDone ? '#f59e0b' : '#34d399'
   const adjust = (delta: number) => setDuration(Math.max(30, Math.min(60 * 60, duration + delta)))
 
-  const match = schedule[currentMatch]
+  // Games cycle through the fixtures forever, so a session can run any number
+  // of games (game N shows fixture N mod scheduleLength).
+  const fixtureIdx = schedule.length ? currentMatch % schedule.length : 0
+  const match = schedule.length ? schedule[fixtureIdx] : undefined
   const home = match ? teams[match.home] : undefined
   const away = match ? teams[match.away] : undefined
+  const resting = match ? match.resting.map((id) => teams[id]?.color.name).filter(Boolean).join(', ') : ''
   const score = matchScores[currentMatch] ?? [0, 0]
 
   const enterJumbo = async () => {
@@ -188,15 +193,26 @@ export function TimerView({
       subtitle="Interval timer with alarm"
       icon={TimerIcon}
       action={
-        <button
-          type="button"
-          onClick={enterJumbo}
-          aria-label="Jumbo fullscreen timer"
-          className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 active:scale-95"
-        >
-          <Maximize className="h-3.5 w-3.5" />
-          Jumbo
-        </button>
+        <>
+          <button
+            type="button"
+            onClick={testAlarm}
+            aria-label="Test alarm sound"
+            className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 active:scale-95"
+          >
+            <Volume2 className="h-3.5 w-3.5" />
+            Test
+          </button>
+          <button
+            type="button"
+            onClick={enterJumbo}
+            aria-label="Jumbo fullscreen timer"
+            className="flex items-center gap-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-1.5 text-xs font-semibold text-zinc-200 active:scale-95"
+          >
+            <Maximize className="h-3.5 w-3.5" />
+            Jumbo
+          </button>
+        </>
       }
     >
       <div className="flex min-h-0 flex-1 flex-col items-center gap-3 overflow-y-auto pb-1">
@@ -230,23 +246,25 @@ export function TimerView({
         {/* Scoreboard for the current fixture */}
         {match && home && away && (
           <div className="w-full shrink-0 rounded-2xl border border-zinc-800 bg-zinc-900 p-3">
-            <div className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+            <div className="mb-2 flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
               <button
                 type="button"
                 onClick={() => onGoToMatch(currentMatch - 1)}
                 disabled={currentMatch <= 0}
                 aria-label="Previous match"
-                className="grid h-6 w-6 place-items-center rounded-md bg-zinc-800 disabled:opacity-30"
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-zinc-800 disabled:opacity-30"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              Match {currentMatch + 1} of {schedule.length}
+              <span className="truncate text-center">
+                Game {currentMatch + 1}
+                {resting && <span className="normal-case text-zinc-600"> · {resting} rests</span>}
+              </span>
               <button
                 type="button"
                 onClick={() => onGoToMatch(currentMatch + 1)}
-                disabled={currentMatch >= schedule.length - 1}
                 aria-label="Next match"
-                className="grid h-6 w-6 place-items-center rounded-md bg-zinc-800 disabled:opacity-30"
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-zinc-800"
               >
                 <ChevronRight className="h-4 w-4" />
               </button>

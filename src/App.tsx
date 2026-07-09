@@ -120,11 +120,9 @@ export default function App() {
   }
 
   const editTeams = (next: Team[]) => {
+    // A drag swap keeps the same fixtures, so the running scores/game stay put.
     setTeams(next)
-    const sched = generateSchedule(next, settings.targetSize)
-    setSchedule(sched)
-    setMatchScores((prev) => sched.map((_, i) => prev[i] ?? [0, 0]))
-    setCurrentMatch((c) => Math.min(c, Math.max(0, sched.length - 1)))
+    setSchedule(generateSchedule(next, settings.targetSize))
   }
 
   // --- Scoreboard ---
@@ -136,18 +134,20 @@ export default function App() {
       cur[side] = Math.max(0, (cur[side] ?? 0) + delta)
       return nextArr
     })
+  // Games cycle through the round-robin fixtures indefinitely, so a session can
+  // run as many games as needed (game N plays fixture N mod scheduleLength).
   const speakMatchup = (i: number) => {
-    const m = schedule[i]
+    const m = schedule.length ? schedule[i % schedule.length] : undefined
     if (m) speak(`${teams[m.home]?.color.name} versus ${teams[m.away]?.color.name}`)
   }
   const goToMatch = (i: number) => {
-    const clamped = Math.max(0, Math.min(i, schedule.length - 1))
+    const clamped = Math.max(0, i)
     setCurrentMatch(clamped)
     if (speakOn) speakMatchup(clamped)
   }
   const advanceMatch = () => {
     if (schedule.length === 0) return
-    if (currentMatch < schedule.length - 1) goToMatch(currentMatch + 1)
+    goToMatch(currentMatch + 1)
   }
   const onAlarmStop = () => {
     timer.stopAlarm()
