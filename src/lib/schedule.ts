@@ -41,6 +41,25 @@ function borrowFor(
 }
 
 /**
+ * Fair single-pitch rotation for 4 teams (ids 0..3), 12 games.
+ *
+ * A naive repeated round-robin (circle method) is unfair: the pivot team ends
+ * up playing one / resting one forever — a "VIP" schedule — while the other
+ * three absorb all the back-to-backs. This fixed order (found by exhaustive
+ * search, ranked for the most even back-to-back distribution) instead gives,
+ * over its 12-game cycle:
+ *   - every team exactly 6 games and exactly ONE back-to-back (shared evenly),
+ *   - no team ever playing or resting 3 games in a row (including the wrap),
+ *   - all 6 matchups exactly twice, no matchup repeated back-to-back.
+ * Because it is fair across the wrap, the live timer can cycle it indefinitely
+ * and every team keeps getting an equal share of the rest.
+ */
+const FAIR_FOUR_ORDER: Array<[number, number]> = [
+  [0, 1], [0, 2], [1, 3], [0, 2], [1, 3], [0, 1],
+  [2, 3], [0, 3], [1, 2], [0, 3], [1, 2], [2, 3],
+]
+
+/**
  * Circle-method single round-robin: every team plays every other exactly once.
  * A dummy (-1) is added for odd team counts; whoever is paired with it byes.
  * Returns a flat, one-pitch-at-a-time list of [home, away] pairs.
@@ -96,7 +115,13 @@ export function generateSchedule(teams: Team[], targetSize: number): Match[] {
     ])
   }
 
-  // Four or more teams: full single round-robin, one match at a time.
+  // Four teams: a fair 12-game rotation (see FAIR_FOUR_ORDER) that shares the
+  // unavoidable back-to-backs evenly instead of parking one team on a
+  // rest-one/play-one pivot.
+  if (n === 4) return build(FAIR_FOUR_ORDER)
+
+  // Five or more teams on a single pitch: fall back to a single round-robin
+  // (with this many teams a team must sometimes sit 3+ out — unavoidable).
   return build(roundRobinPairs(n))
 }
 

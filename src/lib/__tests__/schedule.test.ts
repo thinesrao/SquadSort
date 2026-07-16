@@ -66,17 +66,50 @@ describe('generateSchedule — other team counts', () => {
     expect(borrowLabel(s[0], teams2)).toBeNull()
   })
 
-  it('produces a full round-robin (6 matches) for 4 teams', () => {
+  it('produces a fair 12-game rotation for 4 teams (no VIP pivot)', () => {
     const teams4 = generateTeams(
-      Array.from({ length: 26 }, (_, i) => `P${i}`),
+      Array.from({ length: 28 }, (_, i) => `P${i}`),
       4,
       7,
       seeded(4),
     )
     const s = generateSchedule(teams4, 7)
-    expect(s).toHaveLength(6)
+    expect(s).toHaveLength(12)
     // every match has exactly 2 resting teams
     expect(s.every((m) => m.resting.length === 2)).toBe(true)
+
+    // Circular fairness: over the looping schedule no team plays or rests 3
+    // in a row, every team plays the same number of games, and — the point of
+    // the fix — no team gets the "rest one / play one" VIP alternation.
+    for (const t of teams4) {
+      const playing = s.map((m) => m.home === t.id || m.away === t.id)
+      expect(circularLongestRun(playing, true)).toBeLessThanOrEqual(2)
+      expect(circularLongestRun(playing, false)).toBeLessThanOrEqual(2)
+      expect(playing.filter(Boolean)).toHaveLength(6) // equal playing time
+      const perfectlyAlternates =
+        circularLongestRun(playing, true) === 1 && circularLongestRun(playing, false) === 1
+      expect(perfectlyAlternates).toBe(false)
+    }
+
+    // Every matchup exactly twice.
+    const counts = new Map<string, number>()
+    for (const m of s) {
+      const key = [m.home, m.away].sort((a, b) => a - b).join('-')
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    expect(counts.size).toBe(6)
+    expect([...counts.values()].every((c) => c === 2)).toBe(true)
+
+    // Back-to-backs are shared perfectly evenly (one each).
+    const b2b = teams4.map((t) => {
+      const playing = s.map((m) => m.home === t.id || m.away === t.id)
+      let c = 0
+      for (let k = 0; k < playing.length; k++) {
+        if (playing[k] && playing[(k + 1) % playing.length]) c++
+      }
+      return c
+    })
+    expect(b2b).toEqual([1, 1, 1, 1])
   })
 })
 
@@ -87,6 +120,24 @@ function longestRun(seq: boolean[], value: boolean): number {
   for (const v of seq) {
     cur = v === value ? cur + 1 : 0
     if (cur > best) best = cur
+  }
+  return best
+}
+
+// Longest run treating the sequence as a loop (the timer cycles it).
+function circularLongestRun(seq: boolean[], value: boolean): number {
+  const n = seq.length
+  if (n === 0) return 0
+  if (seq.every((v) => v === value)) return n
+  let best = 0
+  let cur = 0
+  for (let i = 0; i < 2 * n; i++) {
+    if (seq[i % n] === value) {
+      cur++
+      best = Math.max(best, cur)
+    } else {
+      cur = 0
+    }
   }
   return best
 }
