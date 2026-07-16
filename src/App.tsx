@@ -13,6 +13,7 @@ import { TimerView } from './views/TimerView'
 import { parsePlayers } from './lib/parser'
 import { buildTeams } from './lib/teamGenerator'
 import { generateSchedule } from './lib/schedule'
+import { parseScheduleText } from './lib/scheduleImport'
 import { readSharedFromHash } from './lib/shareLink'
 import { speak } from './lib/speech'
 import { vibrate, HAPTIC } from './lib/haptics'
@@ -35,6 +36,7 @@ export default function App() {
   const [teams, setTeams] = usePersistentState<Team[]>('ss.teams', [])
   const [schedule, setSchedule] = usePersistentState<Match[]>('ss.schedule', [])
   const [matchScores, setMatchScores] = usePersistentState<number[][]>('ss.scores', [])
+  const [completedList, setCompletedList] = usePersistentState<number[]>('ss.done', [])
   const [currentMatch, setCurrentMatch] = usePersistentState<number>('ss.match', 0)
   const [autoAdvance, setAutoAdvance] = usePersistentState<boolean>('ss.autoadvance', true)
   const [speakOn, setSpeakOn] = usePersistentState<boolean>('ss.speak', false)
@@ -43,6 +45,7 @@ export default function App() {
   const benched = useMemo(() => new Set(benchedList), [benchedList])
   const gks = useMemo(() => new Set(gkList), [gkList])
   const paid = useMemo(() => new Set(paidList), [paidList])
+  const completed = useMemo(() => new Set(completedList), [completedList])
   const activePlayers = useMemo(() => roster.filter((p) => !benched.has(p)), [roster, benched])
   const ratingOf = (name: string) => ratings[name] ?? 2
 
@@ -55,6 +58,7 @@ export default function App() {
     setTeams(shared.teams)
     setSchedule(sched)
     setMatchScores(sched.map(() => [0, 0]))
+    setCompletedList([])
     setCurrentMatch(0)
     setView('result')
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -114,6 +118,7 @@ export default function App() {
     setWarnings(w)
     setSchedule(sched)
     setMatchScores(sched.map(() => [0, 0]))
+    setCompletedList([])
     setCurrentMatch(0)
     vibrate(HAPTIC.success)
     setView('result')
@@ -124,6 +129,31 @@ export default function App() {
     setTeams(next)
     setSchedule(generateSchedule(next, settings.targetSize))
   }
+
+  // Adopt a schedule pasted from a chat / previous week. Reuses existing team
+  // rosters where the colour matches; otherwise the teams are colour-only.
+  const importScheduleText = (text: string): boolean => {
+    const parsed = parseScheduleText(text, teams)
+    if (!parsed) return false
+    setTeams(parsed.teams)
+    setSchedule(parsed.schedule)
+    setMatchScores(parsed.schedule.map(() => [0, 0]))
+    setCompletedList([])
+    setCurrentMatch(0)
+    setWarnings([])
+    setSettings((s) => ({ ...s, teamCount: parsed.teams.length }))
+    if (parsed.minutesPerGame) timer.setDuration(parsed.minutesPerGame * 60)
+    vibrate(HAPTIC.success)
+    setView('result')
+    return true
+  }
+
+  // --- Match checklist (which games are played) ---
+  const toggleMatchDone = (index: number) =>
+    setCompletedList((prev) =>
+      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index],
+    )
+  const resetChecklist = () => setCompletedList([])
 
   // --- Scoreboard ---
   const bumpScore = (side: 0 | 1, delta: number) =>
@@ -192,6 +222,7 @@ export default function App() {
             onAddPairing={addPairing}
             onRemovePairing={removePairing}
             onGenerate={generate}
+            onImportSchedule={importScheduleText}
           />
         )
       case 'result':
@@ -205,6 +236,9 @@ export default function App() {
             ratingOf={ratingOf}
             balancing={balancing}
             warnings={warnings}
+            completed={completed}
+            onToggleMatchDone={toggleMatchDone}
+            onResetChecklist={resetChecklist}
             onTogglePaid={togglePaid}
             onRegenerate={generate}
             onEditTeams={editTeams}

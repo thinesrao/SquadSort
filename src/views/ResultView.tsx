@@ -13,6 +13,7 @@ import {
   ListOrdered,
   Shirt,
   X,
+  RotateCcw,
 } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { TeamCard } from '../components/TeamCard'
@@ -40,6 +41,9 @@ interface ResultViewProps {
   ratingOf: (name: string) => number
   balancing: boolean
   warnings: string[]
+  completed: Set<number>
+  onToggleMatchDone: (index: number) => void
+  onResetChecklist: () => void
   onTogglePaid: (name: string) => void
   onRegenerate: () => void
   onEditTeams: (next: Team[]) => void
@@ -200,6 +204,9 @@ export function ResultView({
   ratingOf,
   balancing,
   warnings,
+  completed,
+  onToggleMatchDone,
+  onResetChecklist,
   onTogglePaid,
   onRegenerate,
   onEditTeams,
@@ -225,6 +232,9 @@ export function ResultView({
   const strengths = teams.map((t) => t.players.reduce((s, p) => s + ratingOf(p), 0))
   const showStrength = balancing || new Set(teams.flatMap((t) => t.players).map(ratingOf)).size > 1
   const spread = Math.max(...strengths) - Math.min(...strengths)
+
+  const playedCount = schedule.reduce((n, m) => n + (completed.has(m.index) ? 1 : 0), 0)
+  const nextIndex = schedule.find((m) => !completed.has(m.index))?.index ?? null
 
   const handleCopy = async () => {
     const ok = await copyText(formatForWhatsApp(teams, schedule, settings, paid, gks))
@@ -338,15 +348,36 @@ export function ResultView({
           </p>
         </div>
 
-        {/* Schedule */}
+        {/* Schedule checklist — tick games off, next one is highlighted */}
         {schedule.length > 0 && (
-          <div className="shrink-0">
-            <h2 className="mb-1.5 text-xs font-bold uppercase tracking-wide text-zinc-500">
-              Match Schedule
-            </h2>
-            <div className="flex max-h-44 flex-col gap-1.5 overflow-y-auto">
+          <div className="flex min-h-0 shrink flex-col">
+            <div className="mb-1.5 flex items-center justify-between">
+              <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500">
+                Match Schedule
+                <span className="ml-1.5 font-semibold text-emerald-400/90">
+                  {playedCount}/{schedule.length} played
+                </span>
+              </h2>
+              {playedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={onResetChecklist}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-zinc-500 active:scale-95"
+                >
+                  <RotateCcw className="h-3 w-3" /> Reset
+                </button>
+              )}
+            </div>
+            <div className="flex max-h-44 min-h-0 flex-col gap-1.5 overflow-y-auto">
               {schedule.map((m) => (
-                <MatchCard key={m.index} match={m} teams={teams} />
+                <MatchCard
+                  key={m.index}
+                  match={m}
+                  teams={teams}
+                  done={completed.has(m.index)}
+                  isNext={m.index === nextIndex}
+                  onToggleDone={() => onToggleMatchDone(m.index)}
+                />
               ))}
             </div>
           </div>

@@ -10,6 +10,7 @@ import {
   Link2,
   Plus,
   X,
+  ClipboardList,
 } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { Stepper } from '../components/Stepper'
@@ -34,6 +35,7 @@ interface SettingsViewProps {
   onAddPairing: (p: Pairing) => void
   onRemovePairing: (index: number) => void
   onGenerate: () => void
+  onImportSchedule: (text: string) => boolean
 }
 
 function Toggle({
@@ -87,6 +89,7 @@ export function SettingsView({
   onAddPairing,
   onRemovePairing,
   onGenerate,
+  onImportSchedule,
 }: SettingsViewProps) {
   const { targetSize, teamCount } = settings
   const sizes = previewSizes(activeCount, teamCount, targetSize, rollingSubs)
@@ -101,6 +104,13 @@ export function SettingsView({
   const [selA, setSelA] = useState('')
   const [selB, setSelB] = useState('')
   const [ptype, setPtype] = useState<Pairing['type']>('together')
+
+  const [schedOpen, setSchedOpen] = useState(false)
+  const [schedText, setSchedText] = useState('')
+  const [schedErr, setSchedErr] = useState(false)
+  const useSchedule = () => {
+    if (!onImportSchedule(schedText)) setSchedErr(true)
+  }
 
   const bench = (name: string) => {
     vibrate(HAPTIC.tap)
@@ -256,6 +266,50 @@ export function SettingsView({
                     <Plus className="h-4 w-4" />
                   </button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Import a ready-made schedule pasted from a chat / previous week */}
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-3">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
+                <ClipboardList className="h-3.5 w-3.5" /> Import a schedule
+              </span>
+              <button
+                type="button"
+                onClick={() => setSchedOpen((o) => !o)}
+                className="text-[11px] font-semibold text-emerald-400 active:scale-95"
+              >
+                {schedOpen ? 'Close' : 'Paste'}
+              </button>
+            </div>
+            {schedOpen && (
+              <div className="mt-2 flex flex-col gap-2">
+                <textarea
+                  value={schedText}
+                  onChange={(e) => {
+                    setSchedText(e.target.value)
+                    setSchedErr(false)
+                  }}
+                  rows={5}
+                  placeholder={'Paste a schedule, e.g.\n1. ⚪ White vs ⚫ Black\n2. ⚫ Black vs 🔴 Red\n…'}
+                  className="w-full resize-none rounded-lg border border-zinc-700 bg-zinc-800 px-2.5 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none"
+                />
+                {schedErr && (
+                  <p className="flex items-start gap-1.5 text-xs text-amber-300">
+                    <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    Couldn’t find any matches. Use lines like “1. White vs Black”.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={useSchedule}
+                  disabled={!schedText.trim()}
+                  className="flex items-center justify-center gap-2 rounded-lg bg-zinc-700 py-2.5 text-sm font-bold text-zinc-100 active:scale-[0.98] disabled:opacity-40"
+                >
+                  <ClipboardList className="h-4 w-4" /> Use this schedule
+                </button>
               </div>
             )}
           </div>
