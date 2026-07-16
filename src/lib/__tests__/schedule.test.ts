@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { generateTeams } from '../teamGenerator'
-import { generateSchedule } from '../schedule'
+import { generateSchedule, extendSchedule } from '../schedule'
 import { borrowLabel, matchTitle, restingLabel } from '../format'
+import type { Match, Team } from '../../types'
 
 function seeded(seed: number): () => number {
   let a = seed >>> 0
@@ -76,5 +77,72 @@ describe('generateSchedule — other team counts', () => {
     expect(s).toHaveLength(6)
     // every match has exactly 2 resting teams
     expect(s.every((m) => m.resting.length === 2)).toBe(true)
+  })
+})
+
+// Longest run of `true`/`false` in a boolean sequence.
+function longestRun(seq: boolean[], value: boolean): number {
+  let best = 0
+  let cur = 0
+  for (const v of seq) {
+    cur = v === value ? cur + 1 : 0
+    if (cur > best) best = cur
+  }
+  return best
+}
+
+describe('extendSchedule', () => {
+  const base: Match[] = [
+    { index: 1, home: 0, away: 1, resting: [2] },
+    { index: 2, home: 1, away: 2, resting: [0] },
+    { index: 3, home: 2, away: 0, resting: [1] },
+  ]
+
+  it('returns an empty list for an empty base', () => {
+    expect(extendSchedule([], 10)).toEqual([])
+  })
+
+  it('repeats whole cycles to reach at least minGames and re-numbers 1..N', () => {
+    const out = extendSchedule(base, 7) // ceil(7/3) = 3 cycles -> 9 games
+    expect(out).toHaveLength(9)
+    expect(out.map((m) => m.index)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    // fixtures cycle: game 4 == game 1's matchup, etc.
+    expect(out[3].home).toBe(base[0].home)
+    expect(out[3].away).toBe(base[0].away)
+  })
+
+  it('keeps at least one full cycle even when minGames is small', () => {
+    expect(extendSchedule(base, 1)).toHaveLength(3)
+  })
+
+  // Directly answers the "4-team rotation fairness" concern: extending the
+  // circle-method round-robin by whole cycles must never make a team play or
+  // rest 3 games in a row, and every matchup must appear an equal number of
+  // times.
+  it('gives a fair 4-team rotation (no 3-in-a-row, matchups equal)', () => {
+    const teams4: Team[] = generateTeams(
+      Array.from({ length: 28 }, (_, i) => `P${i}`),
+      4,
+      7,
+      seeded(9),
+    )
+    const full = extendSchedule(generateSchedule(teams4, 7), 12) // two full cycles
+    expect(full).toHaveLength(12)
+
+    for (const t of teams4) {
+      const playing = full.map((m) => m.home === t.id || m.away === t.id)
+      expect(longestRun(playing, true)).toBeLessThanOrEqual(2) // never 3 games straight
+      expect(longestRun(playing, false)).toBeLessThanOrEqual(2) // never rests 3 straight
+      expect(playing.some((p) => p)).toBe(true)
+    }
+
+    // All 6 matchups occur, each the same number of times (here, twice).
+    const counts = new Map<string, number>()
+    for (const m of full) {
+      const key = [m.home, m.away].sort((a, b) => a - b).join('-')
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    expect(counts.size).toBe(6)
+    expect([...counts.values()].every((c) => c === 2)).toBe(true)
   })
 })

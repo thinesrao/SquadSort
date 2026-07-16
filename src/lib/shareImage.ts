@@ -14,6 +14,15 @@ import type { Match, Settings, Team } from '../types'
 
 export type ShareOutcome = 'shared' | 'downloaded' | 'failed'
 
+/** Which slice of the line-up the shared image shows. */
+export type ShareMode = 'teams' | 'schedule' | 'both'
+
+export interface ShareOptions {
+  mode?: ShareMode
+  paid?: Set<string>
+  gks?: Set<string>
+}
+
 // --- Layout constants (device-independent px) ---
 const W = 1080
 const PAD = 56
@@ -35,6 +44,8 @@ const CARD_BOTTOM = 16
 const SCHED_HEADER = 64
 const MATCH_LINE = 52
 const SUB_LINE = 42
+const LEGEND_HEADER = 52
+const LEGEND_LINE = 60
 
 const font = (size: number, weight = 400) =>
   `${weight} ${size}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`
@@ -162,6 +173,40 @@ function scheduleHeight(schedule: Match[]): number {
   let h = SCHED_HEADER
   for (const m of schedule) h += MATCH_LINE + (m.borrow || m.note ? SUB_LINE : 0)
   return h
+}
+
+const legendHeight = (teams: Team[]) => LEGEND_HEADER + teams.length * LEGEND_LINE
+
+/** Colour key (jersey + name + head-count) so the schedule reads standalone. */
+function drawLegendBlock(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  teams: Team[],
+) {
+  ctx.textAlign = 'left'
+  ctx.fillStyle = TITLE
+  ctx.font = font(34, 800)
+  ctx.fillText('Teams', x, y + 34)
+  let yy = y + LEGEND_HEADER
+  for (const t of teams) {
+    const chip = 46
+    ctx.fillStyle = CHIP
+    roundRect(ctx, x, yy, chip, chip, 12)
+    ctx.fill()
+    drawJersey(ctx, x + 7, yy + 5, chip - 14, chip - 10, t.color.hex)
+    ctx.textAlign = 'left'
+    ctx.fillStyle = NAME_COLOR
+    ctx.font = font(32, 700)
+    ctx.fillText(truncate(ctx, t.color.name, w - chip - 180), x + chip + 18, yy + 32)
+    ctx.textAlign = 'right'
+    ctx.fillStyle = MUTED
+    ctx.font = font(26, 500)
+    ctx.fillText(`${t.players.length} players`, x + w, yy + 32)
+    ctx.textAlign = 'left'
+    yy += LEGEND_LINE
+  }
 }
 
 function drawTeamCard(
@@ -333,6 +378,7 @@ function drawScheduleBlock(
 type Cell =
   | { type: 'team'; team: Team; x: number; w: number }
   | { type: 'sched'; x: number; w: number }
+  | { type: 'legend'; x: number; w: number }
 interface Row {
   cells: Cell[]
   h: number
@@ -342,28 +388,38 @@ function renderCanvas(
   teams: Team[],
   schedule: Match[],
   settings: Settings,
-  paid?: Set<string>,
-  gks?: Set<string>,
+  opts: ShareOptions,
 ): HTMLCanvasElement {
+  const mode = opts.mode ?? 'both'
+  const { paid, gks } = opts
   const contentW = W - PAD * 2
   const cardW = (contentW - GAP) / 2
   const rightX = PAD + cardW + GAP
 
-  // Lay teams into rows of two.
   const rows: Row[] = []
-  for (let i = 0; i < teams.length; i += 2) {
-    const cells: Cell[] = [{ type: 'team', team: teams[i], x: PAD, w: cardW }]
-    let h = teamCardHeight(teams[i])
-    if (i + 1 < teams.length) {
-      cells.push({ type: 'team', team: teams[i + 1], x: rightX, w: cardW })
-      h = Math.max(h, teamCardHeight(teams[i + 1]))
+
+  // Team cards (rows of two) — everything except the schedule-only image.
+  if (mode !== 'schedule') {
+    for (let i = 0; i < teams.length; i += 2) {
+      const cells: Cell[] = [{ type: 'team', team: teams[i], x: PAD, w: cardW }]
+      let h = teamCardHeight(teams[i])
+      if (i + 1 < teams.length) {
+        cells.push({ type: 'team', team: teams[i + 1], x: rightX, w: cardW })
+        h = Math.max(h, teamCardHeight(teams[i + 1]))
+      }
+      rows.push({ cells, h })
     }
-    rows.push({ cells, h })
   }
 
-  // Place the schedule beside the last team if there's a free right cell
-  // (odd team count → nice square 2×2), otherwise on a full-width row below.
-  if (schedule.length > 0) {
+  // Schedule-only image: a colour legend, then the full-width running order.
+  if (mode === 'schedule') {
+    rows.push({ cells: [{ type: 'legend', x: PAD, w: contentW }], h: legendHeight(teams) })
+    if (schedule.length > 0) {
+      rows.push({ cells: [{ type: 'sched', x: PAD, w: contentW }], h: scheduleHeight(schedule) })
+    }
+  } else if (mode === 'both' && schedule.length > 0) {
+    // Place the schedule beside the last team if there's a free right cell
+    // (odd team count → nice square 2×2), otherwise on a full-width row below.
     const schedH = scheduleHeight(schedule)
     const last = rows[rows.length - 1]
     if (last && last.cells.length === 1) {
@@ -398,17 +454,24 @@ function renderCanvas(
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = TITLE
   ctx.font = font(58, 800)
-  ctx.fillText('Team Line-ups', PAD, PAD + logoS + 62)
+  const heading =
+    mode === 'schedule' ? 'Match Schedule' : mode === 'teams' ? 'Team Line-ups' : 'Teams & Schedule'
+  ctx.fillText(heading, PAD, PAD + logoS + 62)
   ctx.fillStyle = MUTED
   ctx.font = font(28, 500)
   const total = teams.reduce((n, t) => n + t.players.length, 0)
-  ctx.fillText(`${total} players · ${settings.targetSize}-a-side`, PAD, PAD + logoS + 102)
+  const subtitle =
+    mode === 'schedule'
+      ? `${schedule.length} games · ${teams.length} teams`
+      : `${total} players · ${settings.targetSize}-a-side`
+  ctx.fillText(subtitle, PAD, PAD + logoS + 102)
 
   // Rows
   let y = PAD + TITLE_BLOCK
   for (const row of rows) {
     for (const cell of row.cells) {
       if (cell.type === 'team') drawTeamCard(ctx, cell.x, y, cell.w, cell.team, paid, gks)
+      else if (cell.type === 'legend') drawLegendBlock(ctx, cell.x, y, cell.w, teams)
       else drawScheduleBlock(ctx, cell.x, y, cell.w, teams, schedule)
     }
     y += row.h + GAP
@@ -434,22 +497,36 @@ function download(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 4000)
 }
 
+const SHARE_META: Record<ShareMode, { file: string; title: string; text: string }> = {
+  teams: { file: 'squadsort-teams.png', title: 'SquadSort Teams', text: 'Team line-ups ⚽' },
+  schedule: {
+    file: 'squadsort-schedule.png',
+    title: 'SquadSort Schedule',
+    text: 'Match schedule ⚽',
+  },
+  both: {
+    file: 'squadsort-lineups.png',
+    title: 'SquadSort Teams',
+    text: 'Teams & schedule ⚽',
+  },
+}
+
 /** Build the image and share it (or download it as a fallback). */
 export async function shareTeamsImage(
   teams: Team[],
   schedule: Match[],
   settings: Settings,
-  paid?: Set<string>,
-  gks?: Set<string>,
+  options: ShareOptions = {},
 ): Promise<ShareOutcome> {
   if (teams.length === 0) return 'failed'
+  const mode = options.mode ?? 'both'
 
-  const canvas = renderCanvas(teams, schedule, settings, paid, gks)
+  const canvas = renderCanvas(teams, schedule, settings, options)
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
   if (!blob) return 'failed'
 
-  const filename = 'squadsort-teams.png'
-  const file = new File([blob], filename, { type: 'image/png' })
+  const meta = SHARE_META[mode]
+  const file = new File([blob], meta.file, { type: 'image/png' })
 
   const nav = navigator as Navigator & {
     canShare?: (data?: unknown) => boolean
@@ -458,7 +535,7 @@ export async function shareTeamsImage(
 
   if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
     try {
-      await nav.share({ files: [file], title: 'SquadSort Teams', text: 'Teams & schedule ⚽' })
+      await nav.share({ files: [file], title: meta.title, text: meta.text })
       return 'shared'
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return 'shared'
@@ -466,6 +543,6 @@ export async function shareTeamsImage(
     }
   }
 
-  download(blob, filename)
+  download(blob, meta.file)
   return 'downloaded'
 }

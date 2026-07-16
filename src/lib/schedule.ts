@@ -99,3 +99,22 @@ export function generateSchedule(teams: Team[], targetSize: number): Match[] {
   // Four or more teams: full single round-robin, one match at a time.
   return build(roundRobinPairs(n))
 }
+
+/**
+ * Repeat a base fixture list into a longer running order for a full session.
+ *
+ * A round-robin base is only 1–6 fixtures, but a one-hour session plays many
+ * more games than that — the teams simply cycle through the same fixtures
+ * again. `extendSchedule` lays out enough whole cycles to reach at least
+ * `minGames`, re-numbering the games 1..N (borrow/rest notes are carried over
+ * unchanged since the fixtures repeat exactly).
+ */
+export function extendSchedule(base: Match[], minGames = 6): Match[] {
+  if (base.length === 0) return []
+  const cycles = Math.max(1, Math.ceil(minGames / base.length))
+  const out: Match[] = []
+  for (let c = 0; c < cycles; c++) {
+    for (const m of base) out.push({ ...m, index: out.length + 1 })
+  }
+  return out
+}

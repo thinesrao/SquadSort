@@ -30,6 +30,44 @@ export function swapPlayers(
 }
 
 /**
+ * Kit swap: move a player onto a target team whose colour they actually own,
+ * WITHOUT unbalancing the skills. The player trades places with the
+ * closest-rated player already on the target team, so team sizes are preserved
+ * and each team's total strength barely moves (the swapped pair are the two
+ * most similar players, so the strength delta is the smallest possible).
+ *
+ * If the target team is empty there is nobody to trade with, so it falls back
+ * to a plain move. Returns a new teams array; the input is untouched.
+ */
+export function swapToTeamBalanced(
+  teams: Team[],
+  fromTeamId: number,
+  fromIndex: number,
+  targetTeamId: number,
+  ratingOf: (name: string) => number,
+): Team[] {
+  if (fromTeamId === targetTeamId) return teams
+  const from = byId(teams, fromTeamId)
+  const target = byId(teams, targetTeamId)
+  if (!from || !target) return teams
+  const player = from.players[fromIndex]
+  if (player === undefined) return teams
+  if (target.players.length === 0) return movePlayer(teams, fromTeamId, fromIndex, targetTeamId)
+
+  const rating = ratingOf(player)
+  let bestIndex = 0
+  let bestDiff = Infinity
+  target.players.forEach((name, i) => {
+    const diff = Math.abs(ratingOf(name) - rating)
+    if (diff < bestDiff) {
+      bestDiff = diff
+      bestIndex = i
+    }
+  })
+  return swapPlayers(teams, fromTeamId, fromIndex, targetTeamId, bestIndex)
+}
+
+/**
  * Move a player from one team to the end of another. Changes team sizes.
  * Returns a new teams array; the input is untouched.
  */

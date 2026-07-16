@@ -1,13 +1,35 @@
 import { useState } from 'react'
-import { Users, Copy, Check, Shuffle, Image as ImageIcon, Loader2, Hand, Link, AlertTriangle } from 'lucide-react'
+import type { ReactNode } from 'react'
+import {
+  Users,
+  Copy,
+  Check,
+  Shuffle,
+  Image as ImageIcon,
+  Loader2,
+  Hand,
+  Link,
+  AlertTriangle,
+  ListOrdered,
+  Shirt,
+  X,
+} from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { TeamCard } from '../components/TeamCard'
 import { MatchCard } from '../components/MatchCard'
 import { formatForWhatsApp } from '../lib/format'
-import { shareTeamsImage } from '../lib/shareImage'
+import { shareTeamsImage, type ShareMode } from '../lib/shareImage'
 import { buildShareUrl } from '../lib/shareLink'
+import { extendSchedule } from '../lib/schedule'
+import { swapToTeamBalanced } from '../lib/teamEdit'
 import { usePlayerDrag } from '../hooks/usePlayerDrag'
 import type { Match, Settings, Team } from '../types'
+
+interface KitSwapTarget {
+  teamId: number
+  index: number
+  name: string
+}
 
 interface ResultViewProps {
   teams: Team[]
@@ -76,6 +98,99 @@ function EmptyState({ onGoToSetup }: { onGoToSetup: () => void }) {
   )
 }
 
+interface ShareButtonProps {
+  label: string
+  icon: ReactNode
+  onClick: () => void
+  busy?: boolean
+  done?: boolean
+  disabled?: boolean
+  primary?: boolean
+}
+
+function ShareButton({ label, icon, onClick, busy, done, disabled, primary }: ShareButtonProps) {
+  const base = primary
+    ? 'bg-emerald-500 text-emerald-950'
+    : 'bg-zinc-800 text-zinc-100 ring-1 ring-zinc-700'
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || busy}
+      className={`flex flex-col items-center justify-center gap-1 rounded-2xl py-2.5 text-xs font-bold transition active:scale-[0.97] disabled:opacity-40 ${
+        done ? 'bg-emerald-600 text-white' : base
+      }`}
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : done ? <Check className="h-4 w-4" /> : icon}
+      {done ? 'Shared!' : label}
+    </button>
+  )
+}
+
+interface KitSwapSheetProps {
+  target: KitSwapTarget
+  teams: Team[]
+  onPick: (targetTeamId: number) => void
+  onClose: () => void
+}
+
+/** Bottom sheet: move a colour-mismatched player to a kit they actually own. */
+function KitSwapSheet({ target, teams, onPick, onClose }: KitSwapSheetProps) {
+  const fromTeam = teams.find((t) => t.id === target.teamId)
+  const others = teams.filter((t) => t.id !== target.teamId)
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60"
+      onClick={onClose}
+    >
+      <div
+        className="animate-view-in w-full max-w-md rounded-t-3xl bg-zinc-900 p-4 pb-6 ring-1 ring-zinc-800"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-emerald-400">
+              <Shirt className="h-3.5 w-3.5" /> Kit swap
+            </div>
+            <p className="mt-1 text-base font-bold text-zinc-100">
+              Move <span className="text-emerald-300">{target.name}</span> to a kit they own
+            </p>
+            {fromTeam && (
+              <p className="text-xs text-zinc-500">
+                Currently on {fromTeam.color.name}
+              </p>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Cancel kit swap"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-zinc-800 text-zinc-300 active:scale-95"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className={`grid gap-2 ${others.length >= 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
+          {others.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onPick(t.id)}
+              className={`flex flex-col items-center gap-1.5 rounded-2xl bg-zinc-800 py-3 ring-1 transition active:scale-[0.97] ${t.color.ring}`}
+            >
+              <span className={`h-4 w-4 rounded-full ${t.color.swatch}`} aria-hidden />
+              <span className="text-sm font-bold text-zinc-100">{t.color.name}</span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-zinc-500">
+          Trades places with the closest-rated player on that team, so the skill balance stays intact.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function ResultView({
   teams,
   schedule,
@@ -92,8 +207,12 @@ export function ResultView({
 }: ResultViewProps) {
   const [copied, setCopied] = useState(false)
   const [linked, setLinked] = useState(false)
-  const [imgState, setImgState] = useState<'idle' | 'working' | 'done'>('idle')
-  const { ghost, overTeamId, activeKey, dragging, startDrag } = usePlayerDrag(teams, onEditTeams)
+  const [shareBusy, setShareBusy] = useState<ShareMode | null>(null)
+  const [shareDone, setShareDone] = useState<ShareMode | null>(null)
+  const [kitSwap, setKitSwap] = useState<KitSwapTarget | null>(null)
+  const { ghost, overTeamId, activeKey, dragging, startDrag } = usePlayerDrag(teams, onEditTeams, (teamId, index, name) =>
+    setKitSwap({ teamId, index, name }),
+  )
 
   if (teams.length === 0) {
     return (
@@ -123,15 +242,28 @@ export function ResultView({
     }
   }
 
-  const handleShareImage = async () => {
-    setImgState('working')
+  const handleShare = async (mode: ShareMode) => {
+    if (shareBusy) return
+    setShareBusy(mode)
     try {
-      await shareTeamsImage(teams, schedule, settings, paid, gks)
-      setImgState('done')
-      window.setTimeout(() => setImgState('idle'), 1800)
+      // The schedule-only image shows an extended running order (a session
+      // plays many more games than one round-robin), so teams cycle through
+      // the fixtures repeatedly.
+      const sched = mode === 'schedule' ? extendSchedule(schedule, 12) : schedule
+      await shareTeamsImage(teams, sched, settings, { mode, paid, gks })
+      setShareDone(mode)
+      window.setTimeout(() => setShareDone((d) => (d === mode ? null : d)), 1800)
     } catch {
-      setImgState('idle')
+      /* ignore */
+    } finally {
+      setShareBusy(null)
     }
+  }
+
+  const chooseKit = (targetTeamId: number) => {
+    if (!kitSwap) return
+    onEditTeams(swapToTeamBalanced(teams, kitSwap.teamId, kitSwap.index, targetTeamId, ratingOf))
+    setKitSwap(null)
   }
 
   return (
@@ -202,7 +334,7 @@ export function ResultView({
             </div>
           )}
           <p className="flex items-center gap-1.5 text-[11px] text-zinc-500">
-            <Hand className="h-3.5 w-3.5" /> Long-press to move
+            <Hand className="h-3.5 w-3.5" /> Tap to swap kit · long-press to move
           </p>
         </div>
 
@@ -221,36 +353,59 @@ export function ResultView({
         )}
 
         {/* Actions */}
-        <div className="grid shrink-0 grid-cols-2 gap-2">
+        <div className="flex shrink-0 flex-col gap-2">
           <button
             type="button"
             onClick={handleCopy}
-            className={`flex items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold transition active:scale-[0.98] ${
+            className={`flex items-center justify-center gap-2 rounded-2xl py-3 text-base font-bold transition active:scale-[0.98] ${
               copied ? 'bg-emerald-600 text-white' : 'bg-zinc-800 text-zinc-100 ring-1 ring-zinc-700'
             }`}
           >
             {copied ? <Check className="h-5 w-5" /> : <Copy className="h-5 w-5" />}
             {copied ? 'Copied!' : 'Copy text'}
           </button>
-          <button
-            type="button"
-            onClick={handleShareImage}
-            disabled={imgState === 'working'}
-            className={`flex items-center justify-center gap-2 rounded-2xl py-3.5 text-base font-bold transition active:scale-[0.98] ${
-              imgState === 'done' ? 'bg-emerald-600 text-white' : 'bg-emerald-500 text-emerald-950'
-            }`}
-          >
-            {imgState === 'working' ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : imgState === 'done' ? (
-              <Check className="h-5 w-5" />
-            ) : (
-              <ImageIcon className="h-5 w-5" />
-            )}
-            {imgState === 'working' ? 'Preparing…' : imgState === 'done' ? 'Shared!' : 'Share image'}
-          </button>
+          <div>
+            <div className="mb-1 flex items-center gap-1.5 px-0.5 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
+              <ImageIcon className="h-3.5 w-3.5" /> Share image
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <ShareButton
+                label="Teams"
+                icon={<Users className="h-4 w-4" />}
+                busy={shareBusy === 'teams'}
+                done={shareDone === 'teams'}
+                onClick={() => handleShare('teams')}
+              />
+              <ShareButton
+                label="Schedule"
+                icon={<ListOrdered className="h-4 w-4" />}
+                busy={shareBusy === 'schedule'}
+                done={shareDone === 'schedule'}
+                disabled={schedule.length === 0}
+                onClick={() => handleShare('schedule')}
+              />
+              <ShareButton
+                label="Both"
+                icon={<ImageIcon className="h-4 w-4" />}
+                primary
+                busy={shareBusy === 'both'}
+                done={shareDone === 'both'}
+                onClick={() => handleShare('both')}
+              />
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Kit-swap sheet — tap a player to move them to a colour they own */}
+      {kitSwap && (
+        <KitSwapSheet
+          target={kitSwap}
+          teams={teams}
+          onPick={chooseKit}
+          onClose={() => setKitSwap(null)}
+        />
+      )}
 
       {/* Floating drag ghost */}
       {dragging && ghost && (

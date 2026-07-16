@@ -28,11 +28,17 @@ interface Source {
  * A player row is picked up after a short stationary long-press (which also
  * fires a haptic), then dragged over another column. Dropping on a specific
  * player swaps the two; dropping on empty column space moves the player.
+ * A quick tap (release before the long-press fires, with little movement)
+ * instead calls `onTap` — used to open the kit-swap menu.
  * Player rows should set `touch-action: none` so the drag isn't hijacked by
  * scrolling, and carry `data-player-key="teamId:index"`; columns carry
  * `data-team-col="teamId"`.
  */
-export function usePlayerDrag(teams: Team[], onCommit: (t: Team[]) => void) {
+export function usePlayerDrag(
+  teams: Team[],
+  onCommit: (t: Team[]) => void,
+  onTap?: (teamId: number, index: number, name: string) => void,
+) {
   const [ghost, setGhost] = useState<Ghost | null>(null)
   const [overTeamId, setOverTeamId] = useState<number | null>(null)
   const [activeKey, setActiveKey] = useState<string | null>(null)
@@ -41,6 +47,8 @@ export function usePlayerDrag(teams: Team[], onCommit: (t: Team[]) => void) {
   teamsRef.current = teams
   const commitRef = useRef(onCommit)
   commitRef.current = onCommit
+  const tapRef = useRef(onTap)
+  tapRef.current = onTap
 
   const srcRef = useRef<Source | null>(null)
   const activeRef = useRef(false)
@@ -119,6 +127,11 @@ export function usePlayerDrag(teams: Team[], onCommit: (t: Team[]) => void) {
             vibrate(HAPTIC.tap)
             commitRef.current(next)
           }
+        } else if (ev.type === 'pointerup') {
+          // Released before the long-press armed: treat a near-stationary
+          // press as a tap (opens the kit-swap menu).
+          const dist = Math.hypot(ev.clientX - src.startX, ev.clientY - src.startY)
+          if (dist <= MOVE_CANCEL_PX) tapRef.current?.(src.teamId, src.index, src.name)
         }
         cleanup()
       }

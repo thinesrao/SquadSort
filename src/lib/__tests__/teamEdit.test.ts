@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { swapPlayers, movePlayer } from '../teamEdit'
+import { swapPlayers, movePlayer, swapToTeamBalanced } from '../teamEdit'
 import { generateTeams } from '../teamGenerator'
 import type { Team } from '../../types'
 
@@ -67,5 +67,56 @@ describe('movePlayer', () => {
     const snapshot = teams.map((t) => [...t.players])
     movePlayer(teams, 0, 0, 1)
     expect(teams.map((t) => t.players)).toEqual(snapshot)
+  })
+})
+
+describe('swapToTeamBalanced', () => {
+  // Two 3-player teams with controlled ratings.
+  const ratings: Record<string, number> = { A: 5, B: 4, C: 1, D: 1, E: 4, F: 3 }
+  const ratingOf = (n: string) => ratings[n] ?? 2
+  const twoTeams = (): Team[] => {
+    const t = generateTeams(['a', 'b', 'c', 'd', 'e', 'f'], 2, 3, seeded(1))
+    t[0] = { ...t[0], players: ['A', 'B', 'C'], starters: 3 }
+    t[1] = { ...t[1], players: ['D', 'E', 'F'], starters: 3 }
+    return t
+  }
+
+  it('swaps with the closest-rated player on the target team', () => {
+    const teams = twoTeams()
+    // Move A (5) to team 1; closest rating there is E (4), not D(1)/F(3).
+    const next = swapToTeamBalanced(teams, 0, 0, 1, ratingOf)
+    expect(next[0].players).toEqual(['E', 'B', 'C'])
+    expect(next[1].players).toEqual(['D', 'A', 'F'])
+    expect(next.map((t) => t.players.length)).toEqual([3, 3]) // sizes preserved
+  })
+
+  it('minimises the change to each team’s total strength', () => {
+    const teams = twoTeams()
+    const strength = (t: Team) => t.players.reduce((s, p) => s + ratingOf(p), 0)
+    const before = teams.map(strength)
+    const after = swapToTeamBalanced(teams, 0, 0, 1, ratingOf).map(strength)
+    // A(5) <-> E(4): each side moves by just 1 point.
+    expect(Math.abs(after[0] - before[0])).toBe(1)
+    expect(Math.abs(after[1] - before[1])).toBe(1)
+  })
+
+  it('does not mutate the input', () => {
+    const teams = twoTeams()
+    const snapshot = teams.map((t) => [...t.players])
+    swapToTeamBalanced(teams, 0, 0, 1, ratingOf)
+    expect(teams.map((t) => t.players)).toEqual(snapshot)
+  })
+
+  it('is a no-op when target is the same team', () => {
+    const teams = twoTeams()
+    expect(swapToTeamBalanced(teams, 0, 0, 0, ratingOf)).toBe(teams)
+  })
+
+  it('falls back to a plain move when the target team is empty', () => {
+    const teams = twoTeams()
+    teams[1] = { ...teams[1], players: [], starters: 0 }
+    const next = swapToTeamBalanced(teams, 0, 0, 1, ratingOf)
+    expect(next.map((t) => t.players.length)).toEqual([2, 1])
+    expect(next[1].players).toEqual(['A'])
   })
 })
