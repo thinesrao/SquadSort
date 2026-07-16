@@ -44,8 +44,6 @@ const CARD_BOTTOM = 16
 const SCHED_HEADER = 64
 const MATCH_LINE = 52
 const SUB_LINE = 42
-const LEGEND_HEADER = 52
-const LEGEND_LINE = 60
 
 const font = (size: number, weight = 400) =>
   `${weight} ${size}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`
@@ -169,44 +167,10 @@ const teamCardHeight = (team: Team) =>
   (hasSubs(team) ? NAME_LINE : 0) +
   CARD_BOTTOM
 
-function scheduleHeight(schedule: Match[]): number {
-  let h = SCHED_HEADER
+function scheduleHeight(schedule: Match[], header = true): number {
+  let h = header ? SCHED_HEADER : 12
   for (const m of schedule) h += MATCH_LINE + (m.borrow || m.note ? SUB_LINE : 0)
   return h
-}
-
-const legendHeight = (teams: Team[]) => LEGEND_HEADER + teams.length * LEGEND_LINE
-
-/** Colour key (jersey + name + head-count) so the schedule reads standalone. */
-function drawLegendBlock(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  teams: Team[],
-) {
-  ctx.textAlign = 'left'
-  ctx.fillStyle = TITLE
-  ctx.font = font(34, 800)
-  ctx.fillText('Teams', x, y + 34)
-  let yy = y + LEGEND_HEADER
-  for (const t of teams) {
-    const chip = 46
-    ctx.fillStyle = CHIP
-    roundRect(ctx, x, yy, chip, chip, 12)
-    ctx.fill()
-    drawJersey(ctx, x + 7, yy + 5, chip - 14, chip - 10, t.color.hex)
-    ctx.textAlign = 'left'
-    ctx.fillStyle = NAME_COLOR
-    ctx.font = font(32, 700)
-    ctx.fillText(truncate(ctx, t.color.name, w - chip - 180), x + chip + 18, yy + 32)
-    ctx.textAlign = 'right'
-    ctx.fillStyle = MUTED
-    ctx.font = font(26, 500)
-    ctx.fillText(`${t.players.length} players`, x + w, yy + 32)
-    ctx.textAlign = 'left'
-    yy += LEGEND_LINE
-  }
 }
 
 function drawTeamCard(
@@ -304,12 +268,15 @@ function drawScheduleBlock(
   w: number,
   teams: Team[],
   schedule: Match[],
+  header = true,
 ) {
-  ctx.textAlign = 'left'
-  ctx.fillStyle = TITLE
-  ctx.font = font(34, 800)
-  ctx.fillText('Match Schedule', x, y + 36)
-  let yy = y + SCHED_HEADER
+  if (header) {
+    ctx.textAlign = 'left'
+    ctx.fillStyle = TITLE
+    ctx.font = font(34, 800)
+    ctx.fillText('Match Schedule', x, y + 36)
+  }
+  let yy = y + (header ? SCHED_HEADER : 12)
 
   for (const m of schedule) {
     const home = teams[m.home]
@@ -377,8 +344,7 @@ function drawScheduleBlock(
 // --- Cell/row layout ------------------------------------------------------
 type Cell =
   | { type: 'team'; team: Team; x: number; w: number }
-  | { type: 'sched'; x: number; w: number }
-  | { type: 'legend'; x: number; w: number }
+  | { type: 'sched'; x: number; w: number; header: boolean }
 interface Row {
   cells: Cell[]
   h: number
@@ -411,11 +377,15 @@ function renderCanvas(
     }
   }
 
-  // Schedule-only image: a colour legend, then the full-width running order.
+  // Schedule-only image: just the full-width running order (the coloured dots
+  // in each row already identify the teams, so no legend is needed).
   if (mode === 'schedule') {
-    rows.push({ cells: [{ type: 'legend', x: PAD, w: contentW }], h: legendHeight(teams) })
     if (schedule.length > 0) {
-      rows.push({ cells: [{ type: 'sched', x: PAD, w: contentW }], h: scheduleHeight(schedule) })
+      // No sub-header — the image title already says "Match Schedule".
+      rows.push({
+        cells: [{ type: 'sched', x: PAD, w: contentW, header: false }],
+        h: scheduleHeight(schedule, false),
+      })
     }
   } else if (mode === 'both' && schedule.length > 0) {
     // Place the schedule beside the last team if there's a free right cell
@@ -423,10 +393,10 @@ function renderCanvas(
     const schedH = scheduleHeight(schedule)
     const last = rows[rows.length - 1]
     if (last && last.cells.length === 1) {
-      last.cells.push({ type: 'sched', x: rightX, w: cardW })
+      last.cells.push({ type: 'sched', x: rightX, w: cardW, header: true })
       last.h = Math.max(last.h, schedH)
     } else {
-      rows.push({ cells: [{ type: 'sched', x: PAD, w: contentW }], h: schedH })
+      rows.push({ cells: [{ type: 'sched', x: PAD, w: contentW, header: true }], h: schedH })
     }
   }
 
@@ -471,8 +441,7 @@ function renderCanvas(
   for (const row of rows) {
     for (const cell of row.cells) {
       if (cell.type === 'team') drawTeamCard(ctx, cell.x, y, cell.w, cell.team, paid, gks)
-      else if (cell.type === 'legend') drawLegendBlock(ctx, cell.x, y, cell.w, teams)
-      else drawScheduleBlock(ctx, cell.x, y, cell.w, teams, schedule)
+      else drawScheduleBlock(ctx, cell.x, y, cell.w, teams, schedule, cell.header)
     }
     y += row.h + GAP
   }
