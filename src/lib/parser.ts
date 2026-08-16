@@ -43,6 +43,11 @@ const INNER_WHITESPACE = /\s{2,}/g
  *  3. Strip the leading number + punctuation + surrounding whitespace.
  *  4. Return the remaining names, in order.
  */
+/** Capitalize the first letter of each word: "heng" → "Heng", "james am" → "James Am". */
+export function toTitleCase(s: string): string {
+  return s.replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
 export function parsePlayers(raw: string): string[] {
   if (!raw) return []
 
@@ -56,10 +61,12 @@ export function parsePlayers(raw: string): string[] {
     const match = NUMBERED_LINE.exec(trimmed)
     if (!match) continue // not a numbered line => header / noise, skip it
 
-    const name = match[1]
-      .replace(LEADING_JUNK, '')
-      .replace(INNER_WHITESPACE, ' ')
-      .trim()
+    const name = toTitleCase(
+      match[1]
+        .replace(LEADING_JUNK, '')
+        .replace(INNER_WHITESPACE, ' ')
+        .trim(),
+    )
 
     if (name) players.push(name)
   }

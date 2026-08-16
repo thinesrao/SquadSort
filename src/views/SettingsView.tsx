@@ -11,6 +11,7 @@ import {
   Plus,
   X,
   ClipboardList,
+  Timer,
 } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { Stepper } from '../components/Stepper'
@@ -36,6 +37,8 @@ interface SettingsViewProps {
   onRemovePairing: (index: number) => void
   onGenerate: () => void
   onImportSchedule: (text: string) => boolean
+  hideTimer: boolean
+  onToggleHideTimer: (v: boolean) => void
 }
 
 function Toggle({
@@ -90,6 +93,8 @@ export function SettingsView({
   onRemovePairing,
   onGenerate,
   onImportSchedule,
+  hideTimer,
+  onToggleHideTimer,
 }: SettingsViewProps) {
   const { targetSize, teamCount } = settings
   const sizes = previewSizes(activeCount, teamCount, targetSize, rollingSubs)
@@ -351,6 +356,17 @@ export function SettingsView({
               </div>
             )}
           </div>
+
+          <Toggle
+            on={!hideTimer}
+            icon={Timer}
+            title="Show Timer tab"
+            subtitle="Built-in match timer in bottom nav"
+            onClick={() => {
+              vibrate(HAPTIC.tap)
+              onToggleHideTimer(!hideTimer)
+            }}
+          />
 
           {/* Live split preview */}
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-3">

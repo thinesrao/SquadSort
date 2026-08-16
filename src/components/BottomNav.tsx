@@ -19,13 +19,15 @@ interface BottomNavProps {
   active: ViewId
   onChange: (v: ViewId) => void
   resultReady: boolean
+  hideTimer?: boolean
 }
 
-/** Fixed bottom tab bar with four large, thumb-friendly targets. */
-export function BottomNav({ active, onChange, resultReady }: BottomNavProps) {
+/** Fixed bottom tab bar with thumb-friendly targets. */
+export function BottomNav({ active, onChange, resultReady, hideTimer }: BottomNavProps) {
+  const items = hideTimer ? ITEMS.filter((i) => i.id !== 'timer') : ITEMS
   return (
-    <nav className="safe-bottom sticky bottom-0 z-20 grid grid-cols-4 border-t border-zinc-800 bg-zinc-900/95 backdrop-blur">
-      {ITEMS.map(({ id, label, icon: Icon }) => {
+    <nav className={`safe-bottom sticky bottom-0 z-20 grid border-t border-zinc-800 bg-zinc-900/95 backdrop-blur ${hideTimer ? 'grid-cols-3' : 'grid-cols-4'}`}>
+      {items.map(({ id, label, icon: Icon }) => {
         const isActive = active === id
         return (
           <button

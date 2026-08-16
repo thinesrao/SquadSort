@@ -10,9 +10,9 @@ import { RosterView } from './views/RosterView'
 import { SettingsView } from './views/SettingsView'
 import { ResultView } from './views/ResultView'
 import { TimerView } from './views/TimerView'
-import { parsePlayers } from './lib/parser'
+import { parsePlayers, toTitleCase } from './lib/parser'
 import { buildTeams } from './lib/teamGenerator'
-import { generateSchedule } from './lib/schedule'
+import { generateSchedule, extendSchedule } from './lib/schedule'
 import { parseScheduleText } from './lib/scheduleImport'
 import { readSharedFromHash } from './lib/shareLink'
 import { speak } from './lib/speech'
@@ -40,6 +40,9 @@ export default function App() {
   const [currentMatch, setCurrentMatch] = usePersistentState<number>('ss.match', 0)
   const [autoAdvance, setAutoAdvance] = usePersistentState<boolean>('ss.autoadvance', true)
   const [speakOn, setSpeakOn] = usePersistentState<boolean>('ss.speak', false)
+  const [hideTimer, setHideTimer] = usePersistentState<boolean>('ss.hideTimer', true)
+  const [kitAvoid, setKitAvoid] = usePersistentState<Record<string, string[]>>('ss.kitAvoid', {})
+  const [teamHistory, setTeamHistory] = usePersistentState<Record<string, string[]>>('ss.history', {})
   const [warnings, setWarnings] = useState<string[]>([])
 
   const benched = useMemo(() => new Set(benchedList), [benchedList])
@@ -47,13 +50,18 @@ export default function App() {
   const paid = useMemo(() => new Set(paidList), [paidList])
   const completed = useMemo(() => new Set(completedList), [completedList])
   const activePlayers = useMemo(() => roster.filter((p) => !benched.has(p)), [roster, benched])
-  const ratingOf = (name: string) => ratings[name] ?? 2
+  const ratingOf = (name: string) => ratings[toTitleCase(name)] ?? ratings[name] ?? 2
+
+  // Redirect away from hidden timer tab.
+  useEffect(() => {
+    if (hideTimer && view === 'timer') setView('result')
+  }, [hideTimer, view, setView])
 
   // --- Import shared teams from the URL hash (one-time on load) ---
   useEffect(() => {
     const shared = readSharedFromHash()
     if (!shared) return
-    const sched = generateSchedule(shared.teams, shared.targetSize)
+    const sched = extendSchedule(generateSchedule(shared.teams, shared.targetSize), 20)
     setSettings((s) => ({ ...s, targetSize: shared.targetSize, teamCount: shared.teams.length }))
     setTeams(shared.teams)
     setSchedule(sched)
@@ -70,11 +78,11 @@ export default function App() {
     setRoster(parsePlayers(v))
   }
   const addPlayer = (name: string) => {
-    const clean = name.trim()
+    const clean = toTitleCase(name.trim())
     if (clean) setRoster((prev) => [...prev, clean])
   }
   const renamePlayer = (index: number, name: string) => {
-    const clean = name.trim()
+    const clean = toTitleCase(name.trim())
     setRoster((prev) => (clean ? prev.map((p, i) => (i === index ? clean : p)) : prev))
   }
   const removePlayer = (index: number) => setRoster((prev) => prev.filter((_, i) => i !== index))
@@ -82,7 +90,7 @@ export default function App() {
   const toggleBench = (name: string) =>
     setBenchedList((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]))
   const setRating = (name: string, value: number) =>
-    setRatings((prev) => ({ ...prev, [name]: value }))
+    setRatings((prev) => ({ ...prev, [toTitleCase(name)]: value }))
   const toggleGk = (name: string) =>
     setGkList((prev) => (prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]))
   const togglePaid = (name: string) =>
@@ -92,6 +100,12 @@ export default function App() {
       prev.some((x) => x.a === p.a && x.b === p.b) ? prev : [...prev, p],
     )
   const removePairing = (index: number) => setPairings((prev) => prev.filter((_, i) => i !== index))
+  const toggleKitAvoid = (name: string, colorId: string) =>
+    setKitAvoid((prev) => {
+      const cur = prev[name] ?? []
+      const next = cur.includes(colorId) ? cur.filter((c) => c !== colorId) : [...cur, colorId]
+      return { ...prev, [name]: next }
+    })
 
   // Timer state lives at the top level so it keeps running across tab switches.
   const timer = useTimer(DEFAULT_TIMER_SECONDS)
@@ -112,14 +126,26 @@ export default function App() {
       isGk: (n) => gks.has(n),
       keepTogether: keep('together'),
       keepApart: keep('apart'),
+      kitAvoid,
+      teamHistory,
     })
-    const sched = generateSchedule(t, targetSize)
+    const sched = extendSchedule(generateSchedule(t, targetSize), 20)
     setTeams(t)
     setWarnings(w)
     setSchedule(sched)
     setMatchScores(sched.map(() => [0, 0]))
     setCompletedList([])
     setCurrentMatch(0)
+    setTeamHistory((prev) => {
+      const next = { ...prev }
+      for (const team of t) {
+        for (const p of team.players) {
+          const hist = next[p] ?? []
+          next[p] = [team.color.id, ...hist].slice(0, 5)
+        }
+      }
+      return next
+    })
     vibrate(HAPTIC.success)
     setView('result')
   }
@@ -127,7 +153,7 @@ export default function App() {
   const editTeams = (next: Team[]) => {
     // A drag swap keeps the same fixtures, so the running scores/game stay put.
     setTeams(next)
-    setSchedule(generateSchedule(next, settings.targetSize))
+    setSchedule(extendSchedule(generateSchedule(next, settings.targetSize), 20))
   }
 
   // Adopt a schedule pasted from a chat / previous week. Reuses existing team
@@ -136,7 +162,7 @@ export default function App() {
     const parsed = parseScheduleText(text, teams)
     if (!parsed) return false
     setTeams(parsed.teams)
-    setSchedule(parsed.schedule)
+    setSchedule(extendSchedule(parsed.schedule, 20))
     setMatchScores(parsed.schedule.map(() => [0, 0]))
     setCompletedList([])
     setCurrentMatch(0)
@@ -201,6 +227,8 @@ export default function App() {
             onAddPlayer={addPlayer}
             onRenamePlayer={renamePlayer}
             onRemovePlayer={removePlayer}
+            kitAvoid={kitAvoid}
+            onToggleKitAvoid={toggleKitAvoid}
             onContinue={() => setView('settings')}
           />
         )
@@ -223,6 +251,8 @@ export default function App() {
             onRemovePairing={removePairing}
             onGenerate={generate}
             onImportSchedule={importScheduleText}
+            hideTimer={hideTimer}
+            onToggleHideTimer={setHideTimer}
           />
         )
       case 'result':
@@ -269,7 +299,7 @@ export default function App() {
       <main key={view} className="animate-view-in min-h-0 flex-1 overflow-hidden">
         {renderView()}
       </main>
-      <BottomNav active={view} onChange={setView} resultReady={teams.length > 0} />
+      <BottomNav active={view} onChange={setView} resultReady={teams.length > 0} hideTimer={hideTimer} />
       {timer.alarming && <AlarmOverlay onStop={onAlarmStop} />}
       {/* Vercel Web Analytics — collects page views in production, no-ops locally. */}
       <Analytics />

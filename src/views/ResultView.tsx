@@ -21,7 +21,6 @@ import { MatchCard } from '../components/MatchCard'
 import { formatForWhatsApp } from '../lib/format'
 import { shareTeamsImage, type ShareMode } from '../lib/shareImage'
 import { buildShareUrl } from '../lib/shareLink'
-import { extendSchedule } from '../lib/schedule'
 import { swapToTeamBalanced } from '../lib/teamEdit'
 import { usePlayerDrag } from '../hooks/usePlayerDrag'
 import type { Match, Settings, Team } from '../types'
@@ -256,11 +255,7 @@ export function ResultView({
     if (shareBusy) return
     setShareBusy(mode)
     try {
-      // The schedule-only image shows an extended running order (a session
-      // plays many more games than one round-robin), so teams cycle through
-      // the fixtures repeatedly.
-      const sched = mode === 'schedule' ? extendSchedule(schedule, 12) : schedule
-      await shareTeamsImage(teams, sched, settings, { mode, paid, gks })
+      await shareTeamsImage(teams, schedule, settings, { mode, paid, gks })
       setShareDone(mode)
       window.setTimeout(() => setShareDone((d) => (d === mode ? null : d)), 1800)
     } catch {
@@ -304,7 +299,7 @@ export function ResultView({
         </>
       }
     >
-      <div className={`flex min-h-0 flex-1 flex-col gap-3 ${dragging ? 'select-none' : ''}`}>
+      <div className={`flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto ${dragging ? 'select-none' : ''}`}>
         {warnings.length > 0 && (
           <div className="flex shrink-0 items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-300 ring-1 ring-amber-500/25">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -313,7 +308,7 @@ export function ResultView({
         )}
 
         {/* Team columns — long-press a player to move/swap */}
-        <div className={`grid min-h-0 flex-1 gap-2 ${gridColsClass(teams.length)}`}>
+        <div className={`grid gap-2 ${gridColsClass(teams.length)}`}>
           {teams.map((team) => (
             <TeamCard
               key={team.id}
@@ -350,7 +345,7 @@ export function ResultView({
 
         {/* Schedule checklist — tick games off, next one is highlighted */}
         {schedule.length > 0 && (
-          <div className="flex min-h-0 shrink flex-col">
+          <div className="flex flex-col">
             <div className="mb-1.5 flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500">
                 Match Schedule
@@ -368,7 +363,7 @@ export function ResultView({
                 </button>
               )}
             </div>
-            <div className="flex max-h-44 min-h-0 flex-col gap-1.5 overflow-y-auto">
+            <div className="flex flex-col gap-1.5">
               {schedule.map((m) => (
                 <MatchCard
                   key={m.index}

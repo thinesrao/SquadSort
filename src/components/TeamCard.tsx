@@ -34,7 +34,7 @@ export function TeamCard({
   return (
     <div
       data-team-col={team.id}
-      className={`flex min-h-0 flex-col overflow-hidden rounded-xl bg-zinc-900 ring-1 transition ${
+      className={`flex flex-col rounded-xl bg-zinc-900 ring-1 transition ${
         isOver ? 'ring-2 ring-emerald-400' : color.ring
       }`}
     >
@@ -50,7 +50,7 @@ export function TeamCard({
           <span className="opacity-80">{players.length}</span>
         </span>
       </div>
-      <ol className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-1.5">
+      <ol className="space-y-0.5 px-2 py-1.5">
         {players.map((name, i) => {
           const key = `${team.id}:${i}`
           const isDragging = activeKey === key

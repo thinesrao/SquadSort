@@ -167,6 +167,8 @@ export interface BuildOptions {
   isGk?: (name: string) => boolean
   keepTogether?: Pairing[]
   keepApart?: Pairing[]
+  kitAvoid?: Record<string, string[]>
+  teamHistory?: Record<string, string[]>
   rng?: () => number
 }
 
@@ -192,6 +194,8 @@ export function buildTeams(players: Player[], opts: BuildOptions): BuildResult {
     isGk,
     keepTogether = [],
     keepApart = [],
+    kitAvoid = {},
+    teamHistory = {},
     rng = Math.random,
   } = opts
   const warnings: string[] = []
@@ -290,6 +294,66 @@ export function buildTeams(players: Player[], opts: BuildOptions): BuildResult {
     if (present([a, b]) && teamOf(a) !== teamOf(b)) warnings.push(`Couldn't keep ${a} & ${b} together`)
   for (const [a, b] of keepApart)
     if (present([a, b]) && teamOf(a) === teamOf(b)) warnings.push(`Couldn't keep ${a} & ${b} apart`)
+
+  // 4) Kit-avoidance repair: swap players off teams whose color they don't own.
+  const teamColors = Array.from({ length: teamCount }, (_, idx) => colorForIndex(idx).id)
+  const hasKitConflict = (name: string, ti: number) => {
+    const avoid = kitAvoid[name]
+    return avoid ? avoid.includes(teamColors[ti]) : false
+  }
+  for (let pass = 0; pass < 5; pass++) {
+    let changed = false
+    for (let ti = 0; ti < teamCount; ti++) {
+      for (let pi = 0; pi < rosters[ti].length; pi++) {
+        const name = rosters[ti][pi]
+        if (!hasKitConflict(name, ti)) continue
+        let swapped = false
+        for (let ot = 0; ot < teamCount; ot++) {
+          if (ot === ti) continue
+          if (hasKitConflict(name, ot)) continue
+          for (let oi = 0; oi < rosters[ot].length; oi++) {
+            const other = rosters[ot][oi]
+            if (hasKitConflict(other, ti)) continue
+            rosters[ti][pi] = other
+            rosters[ot][oi] = name
+            swapped = true
+            changed = true
+            break
+          }
+          if (swapped) break
+        }
+        if (!swapped) warnings.push(`${name} can't avoid ${teamColors[ti]}`)
+      }
+    }
+    if (!changed) break
+  }
+
+  // 5) Team-history repair: try to move players off teams they were on recently.
+  for (let pass = 0; pass < 3; pass++) {
+    let changed = false
+    for (let ti = 0; ti < teamCount; ti++) {
+      for (let pi = 0; pi < rosters[ti].length; pi++) {
+        const name = rosters[ti][pi]
+        const hist = teamHistory[name]
+        if (!hist || hist[0] !== teamColors[ti]) continue
+        for (let ot = 0; ot < teamCount; ot++) {
+          if (ot === ti) continue
+          for (let oi = 0; oi < rosters[ot].length; oi++) {
+            const other = rosters[ot][oi]
+            const otherHist = teamHistory[other]
+            if (otherHist && otherHist[0] === teamColors[ot]) continue
+            if (hasKitConflict(name, ot) || hasKitConflict(other, ti)) continue
+            rosters[ti][pi] = other
+            rosters[ot][oi] = name
+            changed = true
+            break
+          }
+          if (rosters[ti][pi] !== name) break
+        }
+      }
+    }
+    if (!changed) break
+  }
 
   const teams = toTeams(rosters, targetSize, allStarters)
   return { teams, warnings }

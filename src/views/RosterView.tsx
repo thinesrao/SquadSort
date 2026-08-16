@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { ClipboardList, ArrowRight, Trash2, FileText, Star, Plus, X, Pencil } from 'lucide-react'
+import { ClipboardList, ArrowRight, Trash2, FileText, Star, Plus, X, Pencil, Shirt } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { StarRating } from '../components/StarRating'
+import { TEAM_COLORS } from '../constants'
 
 const SAMPLE = `⚽ Futsal — 09 July 2026
 8-9pm @ The Cage
@@ -40,6 +41,8 @@ interface RosterViewProps {
   onAddPlayer: (name: string) => void
   onRenamePlayer: (index: number, name: string) => void
   onRemovePlayer: (index: number) => void
+  kitAvoid: Record<string, string[]>
+  onToggleKitAvoid: (name: string, colorId: string) => void
   onContinue: () => void
 }
 
@@ -56,11 +59,15 @@ export function RosterView({
   onAddPlayer,
   onRenamePlayer,
   onRemovePlayer,
+  kitAvoid,
+  onToggleKitAvoid,
   onContinue,
 }: RosterViewProps) {
   const [addName, setAddName] = useState('')
   const [editIndex, setEditIndex] = useState<number | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [showKits, setShowKits] = useState(false)
+  const KIT_COLORS = TEAM_COLORS.slice(0, 4)
 
   const commitAdd = () => {
     if (addName.trim()) {
@@ -138,16 +145,28 @@ export function RosterView({
           <div className="flex min-h-0 flex-1 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/60">
             <div className="flex items-center justify-between px-3 pb-1.5 pt-2">
               <span className="text-[11px] font-semibold text-zinc-500">{roster.length} players</span>
-              <button
-                type="button"
-                onClick={onToggleShowRatings}
-                className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition active:scale-95 ${
-                  showRatings ? 'bg-amber-400/15 text-amber-300' : 'bg-zinc-800 text-zinc-400'
-                }`}
-              >
-                <Star className={`h-3 w-3 ${showRatings ? 'fill-amber-400 text-amber-400' : ''}`} />
-                {showRatings ? 'Hide ratings' : 'Rate & GK'}
-              </button>
+              <div className="flex gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setShowKits((v) => !v)}
+                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition active:scale-95 ${
+                    showKits ? 'bg-blue-400/15 text-blue-300' : 'bg-zinc-800 text-zinc-400'
+                  }`}
+                >
+                  <Shirt className="h-3 w-3" />
+                  Kits
+                </button>
+                <button
+                  type="button"
+                  onClick={onToggleShowRatings}
+                  className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold transition active:scale-95 ${
+                    showRatings ? 'bg-amber-400/15 text-amber-300' : 'bg-zinc-800 text-zinc-400'
+                  }`}
+                >
+                  <Star className={`h-3 w-3 ${showRatings ? 'fill-amber-400 text-amber-400' : ''}`} />
+                  {showRatings ? 'Hide ratings' : 'Rate & GK'}
+                </button>
+              </div>
             </div>
 
             <ul className="min-h-0 flex-1 divide-y divide-zinc-800/70 overflow-y-auto px-2 pb-1">
@@ -176,6 +195,27 @@ export function RosterView({
                         <Pencil className="h-3 w-3 shrink-0 text-zinc-600" />
                       </button>
                     </>
+                  )}
+
+                  {showKits && editIndex !== i && (
+                    <div className="flex shrink-0 gap-1">
+                      {KIT_COLORS.map((c) => {
+                        const avoided = (kitAvoid[name] ?? []).includes(c.id)
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => onToggleKitAvoid(name, c.id)}
+                            aria-label={`${name} ${avoided ? 'missing' : 'has'} ${c.name}`}
+                            className={`h-5 w-5 rounded-full ring-1 transition active:scale-90 ${c.swatch} ${
+                              avoided ? 'opacity-20 ring-zinc-600' : 'ring-zinc-500'
+                            }`}
+                          >
+                            {avoided && <X className="h-5 w-5 text-red-400" />}
+                          </button>
+                        )
+                      })}
+                    </div>
                   )}
 
                   {showRatings && editIndex !== i && (
