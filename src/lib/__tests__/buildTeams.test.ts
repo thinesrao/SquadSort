@@ -83,4 +83,50 @@ describe('buildTeams — constraints', () => {
     expect(new Set(teams.flatMap((t) => t.players)).size).toBe(18)
     expect(teams.map((t) => t.starters)).toEqual([7, 7])
   })
+
+  it('keepApart survives kit-avoidance pass', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const { teams } = buildTeams(roster(14), {
+        teamCount: 2,
+        targetSize: 7,
+        rollingSubs: false,
+        keepApart: [['P1', 'P2']],
+        kitAvoid: { P1: ['white'] },
+        rng: seeded(seed),
+      })
+      const t1 = teams.findIndex((t) => t.players.includes('P1'))
+      const t2 = teams.findIndex((t) => t.players.includes('P2'))
+      expect(t1).not.toBe(t2)
+    }
+  })
+
+  it('keepTogether survives team-history pass', () => {
+    for (let seed = 1; seed <= 20; seed++) {
+      const { teams } = buildTeams(roster(14), {
+        teamCount: 2,
+        targetSize: 7,
+        rollingSubs: false,
+        keepTogether: [['P1', 'P2']],
+        teamHistory: { P1: ['white'], P2: ['white'] },
+        rng: seeded(seed),
+      })
+      const t1 = teams.findIndex((t) => t.players.includes('P1'))
+      const t2 = teams.findIndex((t) => t.players.includes('P2'))
+      expect(t1).toBe(t2)
+    }
+  })
+
+  it('warns when kitAvoid + keepApart are unsatisfiable', () => {
+    const { warnings } = buildTeams(roster(14), {
+      teamCount: 2,
+      targetSize: 7,
+      rollingSubs: false,
+      keepApart: [['P1', 'P2']],
+      kitAvoid: { P1: ['white', 'black'], P2: ['white', 'black'] },
+      rng: seeded(1),
+    })
+    const hasKitWarn = warnings.some((w) => /can't avoid/i.test(w))
+    const hasPairWarn = warnings.some((w) => /couldn't keep/i.test(w))
+    expect(hasKitWarn || hasPairWarn).toBe(true)
+  })
 })

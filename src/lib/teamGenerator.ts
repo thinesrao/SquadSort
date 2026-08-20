@@ -290,10 +290,18 @@ export function buildTeams(players: Player[], opts: BuildOptions): BuildResult {
     }
     if (!changed) break
   }
-  for (const [a, b] of keepTogether)
-    if (present([a, b]) && teamOf(a) !== teamOf(b)) warnings.push(`Couldn't keep ${a} & ${b} together`)
-  for (const [a, b] of keepApart)
-    if (present([a, b]) && teamOf(a) === teamOf(b)) warnings.push(`Couldn't keep ${a} & ${b} apart`)
+  // Guard: would swapping `name` from `fromTeam` to `toTeam` violate a pairing?
+  const violatesPairing = (name: string, fromTeam: number, toTeam: number): boolean => {
+    for (const [a, b] of keepTogether) {
+      if (a === name && teamOf(b) === fromTeam && toTeam !== fromTeam) return true
+      if (b === name && teamOf(a) === fromTeam && toTeam !== fromTeam) return true
+    }
+    for (const [a, b] of keepApart) {
+      if (a === name && teamOf(b) === toTeam) return true
+      if (b === name && teamOf(a) === toTeam) return true
+    }
+    return false
+  }
 
   // 4) Kit-avoidance repair: swap players off teams whose color they don't own.
   const teamColors = Array.from({ length: teamCount }, (_, idx) => colorForIndex(idx).id)
@@ -314,6 +322,7 @@ export function buildTeams(players: Player[], opts: BuildOptions): BuildResult {
           for (let oi = 0; oi < rosters[ot].length; oi++) {
             const other = rosters[ot][oi]
             if (hasKitConflict(other, ti)) continue
+            if (violatesPairing(name, ti, ot) || violatesPairing(other, ot, ti)) continue
             rosters[ti][pi] = other
             rosters[ot][oi] = name
             swapped = true
@@ -343,6 +352,7 @@ export function buildTeams(players: Player[], opts: BuildOptions): BuildResult {
             const otherHist = teamHistory[other]
             if (otherHist && otherHist[0] === teamColors[ot]) continue
             if (hasKitConflict(name, ot) || hasKitConflict(other, ti)) continue
+            if (violatesPairing(name, ti, ot) || violatesPairing(other, ot, ti)) continue
             rosters[ti][pi] = other
             rosters[ot][oi] = name
             changed = true
@@ -354,6 +364,12 @@ export function buildTeams(players: Player[], opts: BuildOptions): BuildResult {
     }
     if (!changed) break
   }
+
+  // Pairing warnings after ALL passes so violations from later passes are reported.
+  for (const [a, b] of keepTogether)
+    if (present([a, b]) && teamOf(a) !== teamOf(b)) warnings.push(`Couldn't keep ${a} & ${b} together`)
+  for (const [a, b] of keepApart)
+    if (present([a, b]) && teamOf(a) === teamOf(b)) warnings.push(`Couldn't keep ${a} & ${b} apart`)
 
   const teams = toTeams(rosters, targetSize, allStarters)
   return { teams, warnings }
