@@ -210,11 +210,12 @@ describe('buildTeams — staleness repair (lineupHistory)', () => {
     expect(splitCount).toBeGreaterThan(25)
   })
 
-  it('tends to unite a pair that was apart 2x in a row', () => {
+  it('tends to unite a pair that was apart 3x in a row', () => {
     // Use "ghost" players so only P1+P2 have an apart streak
     const history: LineupRecord[] = [
       { confirmedAt: '2026-01-01', teams: [['P1', 'X1', 'X2', 'X3', 'X4', 'X5', 'X6'], ['P2', 'X7', 'X8', 'X9', 'X10', 'X11', 'X12']] },
       { confirmedAt: '2026-01-02', teams: [['P1', 'X1', 'X2', 'X3', 'X4', 'X5', 'X6'], ['P2', 'X7', 'X8', 'X9', 'X10', 'X11', 'X12']] },
+      { confirmedAt: '2026-01-03', teams: [['P1', 'X1', 'X2', 'X3', 'X4', 'X5', 'X6'], ['P2', 'X7', 'X8', 'X9', 'X10', 'X11', 'X12']] },
     ]
     let unitedCount = 0
     for (let seed = 1; seed <= 40; seed++) {

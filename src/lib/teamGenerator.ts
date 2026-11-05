@@ -391,7 +391,7 @@ export function buildTeams(players: Player[], opts: BuildOptions): BuildResult {
     for (const [key, { sameStreak, apartStreak }] of streaks) {
       const [a, b] = key.split('|')
       if (sameStreak >= 2) splitTargets.push([a, b, sameStreak])
-      if (apartStreak >= 2) uniteTargets.push([a, b, apartStreak])
+      if (apartStreak >= 3) uniteTargets.push([a, b, apartStreak])
     }
     splitTargets.sort((a, b) => b[2] - a[2])
     uniteTargets.sort((a, b) => b[2] - a[2])
