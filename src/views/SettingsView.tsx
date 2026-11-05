@@ -7,9 +7,6 @@ import {
   Scale,
   Repeat,
   Lightbulb,
-  Link2,
-  Plus,
-  X,
   ClipboardList,
   Timer,
 } from 'lucide-react'
@@ -87,10 +84,6 @@ export function SettingsView({
   onToggleBalancing,
   rollingSubs,
   onToggleRolling,
-  activePlayers,
-  pairings,
-  onAddPairing,
-  onRemovePairing,
   onGenerate,
   onImportSchedule,
   hideTimer,
@@ -105,11 +98,6 @@ export function SettingsView({
   const rec = recommendedTeamCount(activeCount)
   const showRec = activeCount >= 2 && rec !== teamCount
 
-  const [pairOpen, setPairOpen] = useState(false)
-  const [selA, setSelA] = useState('')
-  const [selB, setSelB] = useState('')
-  const [ptype, setPtype] = useState<Pairing['type']>('together')
-
   const [schedOpen, setSchedOpen] = useState(false)
   const [schedText, setSchedText] = useState('')
   const [schedErr, setSchedErr] = useState(false)
@@ -121,14 +109,6 @@ export function SettingsView({
     vibrate(HAPTIC.tap)
     onToggleBench(name)
   }
-  const addPair = () => {
-    if (selA && selB && selA !== selB) {
-      onAddPairing({ a: selA, b: selB, type: ptype })
-      setSelA('')
-      setSelB('')
-    }
-  }
-
   return (
     <ViewShell title="Setup" subtitle="How should teams be built?" icon={SlidersHorizontal}>
       <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -191,89 +171,6 @@ export function SettingsView({
               <span className="font-bold">Use</span>
             </button>
           )}
-
-          {/* Pairings: keep together / apart */}
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-3">
-            <div className="flex items-center justify-between">
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
-                <Link2 className="h-3.5 w-3.5" /> Pairings
-              </span>
-              <button
-                type="button"
-                onClick={() => setPairOpen((o) => !o)}
-                className="text-[11px] font-semibold text-emerald-400 active:scale-95"
-              >
-                {pairOpen ? 'Close' : '+ Add rule'}
-              </button>
-            </div>
-            {pairings.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {pairings.map((p, i) => (
-                  <span
-                    key={`${p.a}-${p.b}-${i}`}
-                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                      p.type === 'together'
-                        ? 'bg-emerald-500/15 text-emerald-300'
-                        : 'bg-rose-500/15 text-rose-300'
-                    }`}
-                  >
-                    {p.a} {p.type === 'together' ? '＋' : '✕'} {p.b}
-                    <button type="button" onClick={() => onRemovePairing(i)} aria-label="Remove pairing">
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-            {pairOpen && (
-              <div className="mt-2 flex flex-col gap-2">
-                <div className="flex gap-2">
-                  {[
-                    [selA, setSelA] as const,
-                    [selB, setSelB] as const,
-                  ].map(([val, set], idx) => (
-                    <select
-                      key={idx}
-                      value={val}
-                      onChange={(e) => set(e.target.value)}
-                      className="min-w-0 flex-1 rounded-lg border border-zinc-700 bg-zinc-800 px-2 py-2 text-sm text-zinc-100 focus:outline-none"
-                    >
-                      <option value="">{idx === 0 ? 'Player A' : 'Player B'}</option>
-                      {activePlayers.map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <div className="flex flex-1 overflow-hidden rounded-lg border border-zinc-700">
-                    {(['together', 'apart'] as const).map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setPtype(t)}
-                        className={`flex-1 py-2 text-xs font-semibold capitalize transition ${
-                          ptype === t ? 'bg-emerald-500 text-emerald-950' : 'bg-zinc-800 text-zinc-300'
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addPair}
-                    disabled={!selA || !selB || selA === selB}
-                    className="flex items-center gap-1 rounded-lg bg-zinc-700 px-3 text-sm font-semibold text-zinc-100 active:scale-95 disabled:opacity-40"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
 
           {/* Import a ready-made schedule pasted from a chat / previous week */}
           <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-3">

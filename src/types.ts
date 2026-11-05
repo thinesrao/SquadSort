@@ -66,4 +66,10 @@ export interface Pairing {
   type: 'together' | 'apart'
 }
 
+/** A confirmed lineup snapshot: which players were on which team. */
+export interface LineupRecord {
+  confirmedAt: string
+  teams: string[][]
+}
+
 export type ViewId = 'roster' | 'settings' | 'result' | 'timer'

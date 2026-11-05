@@ -1,4 +1,4 @@
-import type { Player, Team } from '../types'
+import type { LineupRecord, Player, Team } from '../types'
 import { colorForIndex } from '../constants'
 
 /**
@@ -169,12 +169,56 @@ export interface BuildOptions {
   keepApart?: Pairing[]
   kitAvoid?: Record<string, string[]>
   teamHistory?: Record<string, string[]>
+  lineupHistory?: LineupRecord[]
   rng?: () => number
 }
 
 export interface BuildResult {
   teams: Team[]
   warnings: string[]
+}
+
+export interface PairStreak {
+  sameStreak: number
+  apartStreak: number
+}
+
+function pairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`
+}
+
+export function pairStreaks(
+  history: LineupRecord[],
+  players: Set<string>,
+): Map<string, PairStreak> {
+  const result = new Map<string, PairStreak>()
+  if (history.length === 0) return result
+
+  const playerArr = [...players]
+  for (let i = 0; i < playerArr.length; i++) {
+    for (let j = i + 1; j < playerArr.length; j++) {
+      const a = playerArr[i]
+      const b = playerArr[j]
+      let same = 0
+      let apart = 0
+      for (const record of history) {
+        const teamA = record.teams.findIndex((t) => t.includes(a))
+        const teamB = record.teams.findIndex((t) => t.includes(b))
+        if (teamA < 0 || teamB < 0) break
+        if (teamA === teamB) {
+          if (apart > 0) break
+          same++
+        } else {
+          if (same > 0) break
+          apart++
+        }
+      }
+      if (same > 0 || apart > 0) {
+        result.set(pairKey(a, b), { sameStreak: same, apartStreak: apart })
+      }
+    }
+  }
+  return result
 }
 
 /**
@@ -196,6 +240,7 @@ export function buildTeams(players: Player[], opts: BuildOptions): BuildResult {
     keepApart = [],
     kitAvoid = {},
     teamHistory = {},
+    lineupHistory = [],
     rng = Math.random,
   } = opts
   const warnings: string[] = []
@@ -337,32 +382,87 @@ export function buildTeams(players: Player[], opts: BuildOptions): BuildResult {
     if (!changed) break
   }
 
-  // 5) Team-history repair: try to move players off teams they were on recently.
-  for (let pass = 0; pass < 3; pass++) {
-    let changed = false
-    for (let ti = 0; ti < teamCount; ti++) {
-      for (let pi = 0; pi < rosters[ti].length; pi++) {
-        const name = rosters[ti][pi]
-        const hist = teamHistory[name]
-        if (!hist || hist[0] !== teamColors[ti]) continue
+  // 5) Staleness repair: avoid the same pair being together (or apart) too many weeks in a row.
+  if (lineupHistory.length > 0) {
+    const activeSet = new Set(players)
+    const streaks = pairStreaks(lineupHistory, activeSet)
+    const splitTargets: [string, string, number][] = []
+    const uniteTargets: [string, string, number][] = []
+    for (const [key, { sameStreak, apartStreak }] of streaks) {
+      const [a, b] = key.split('|')
+      if (sameStreak >= 2) splitTargets.push([a, b, sameStreak])
+      if (apartStreak >= 2) uniteTargets.push([a, b, apartStreak])
+    }
+    splitTargets.sort((a, b) => b[2] - a[2])
+    uniteTargets.sort((a, b) => b[2] - a[2])
+
+    for (let pass = 0; pass < 3; pass++) {
+      let changed = false
+      for (const [a, b] of splitTargets) {
+        if (teamOf(a) < 0 || teamOf(b) < 0 || teamOf(a) !== teamOf(b)) continue
+        const ti = teamOf(b)
         for (let ot = 0; ot < teamCount; ot++) {
           if (ot === ti) continue
+          let swapped = false
           for (let oi = 0; oi < rosters[ot].length; oi++) {
             const other = rosters[ot][oi]
-            const otherHist = teamHistory[other]
-            if (otherHist && otherHist[0] === teamColors[ot]) continue
-            if (hasKitConflict(name, ot) || hasKitConflict(other, ti)) continue
-            if (violatesPairing(name, ti, ot) || violatesPairing(other, ot, ti)) continue
-            rosters[ti][pi] = other
-            rosters[ot][oi] = name
+            if (hasKitConflict(b, ot) || hasKitConflict(other, ti)) continue
+            if (violatesPairing(b, ti, ot) || violatesPairing(other, ot, ti)) continue
+            const bi = rosters[ti].indexOf(b)
+            rosters[ti][bi] = other
+            rosters[ot][oi] = b
+            swapped = true
             changed = true
             break
           }
-          if (rosters[ti][pi] !== name) break
+          if (swapped) break
         }
       }
+      for (const [a, b] of uniteTargets) {
+        if (teamOf(a) < 0 || teamOf(b) < 0 || teamOf(a) === teamOf(b)) continue
+        const target = teamOf(a)
+        const from = teamOf(b)
+        const bi = rosters[from].indexOf(b)
+        for (let oi = 0; oi < rosters[target].length; oi++) {
+          const other = rosters[target][oi]
+          if (hasKitConflict(b, target) || hasKitConflict(other, from)) continue
+          if (violatesPairing(b, from, target) || violatesPairing(other, target, from)) continue
+          rosters[from][bi] = other
+          rosters[target][oi] = b
+          changed = true
+          break
+        }
+      }
+      if (!changed) break
     }
-    if (!changed) break
+  } else if (Object.keys(teamHistory).length > 0) {
+    // Legacy fallback: color-based avoidance when no lineup history exists yet.
+    for (let pass = 0; pass < 3; pass++) {
+      let changed = false
+      for (let ti = 0; ti < teamCount; ti++) {
+        for (let pi = 0; pi < rosters[ti].length; pi++) {
+          const name = rosters[ti][pi]
+          const hist = teamHistory[name]
+          if (!hist || hist[0] !== teamColors[ti]) continue
+          for (let ot = 0; ot < teamCount; ot++) {
+            if (ot === ti) continue
+            for (let oi = 0; oi < rosters[ot].length; oi++) {
+              const other = rosters[ot][oi]
+              const otherHist = teamHistory[other]
+              if (otherHist && otherHist[0] === teamColors[ot]) continue
+              if (hasKitConflict(name, ot) || hasKitConflict(other, ti)) continue
+              if (violatesPairing(name, ti, ot) || violatesPairing(other, ot, ti)) continue
+              rosters[ti][pi] = other
+              rosters[ot][oi] = name
+              changed = true
+              break
+            }
+            if (rosters[ti][pi] !== name) break
+          }
+        }
+      }
+      if (!changed) break
+    }
   }
 
   // Pairing warnings after ALL passes so violations from later passes are reported.

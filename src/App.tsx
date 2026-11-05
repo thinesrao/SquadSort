@@ -18,7 +18,7 @@ import { readSharedFromHash } from './lib/shareLink'
 import { speak } from './lib/speech'
 import { vibrate, HAPTIC } from './lib/haptics'
 import { DEFAULT_SETTINGS, DEFAULT_TIMER_SECONDS } from './constants'
-import type { Match, Pairing, Settings, Team, ViewId } from './types'
+import type { LineupRecord, Match, Pairing, Settings, Team, ViewId } from './types'
 
 export default function App() {
   const [view, setView] = usePersistentState<ViewId>('ss.view', 'roster')
@@ -36,19 +36,20 @@ export default function App() {
   const [teams, setTeams] = usePersistentState<Team[]>('ss.teams', [])
   const [schedule, setSchedule] = usePersistentState<Match[]>('ss.schedule', [])
   const [matchScores, setMatchScores] = usePersistentState<number[][]>('ss.scores', [])
-  const [completedList, setCompletedList] = usePersistentState<number[]>('ss.done', [])
+  const [, setCompletedList] = usePersistentState<number[]>('ss.done', [])
   const [currentMatch, setCurrentMatch] = usePersistentState<number>('ss.match', 0)
   const [autoAdvance, setAutoAdvance] = usePersistentState<boolean>('ss.autoadvance', true)
   const [speakOn, setSpeakOn] = usePersistentState<boolean>('ss.speak', false)
   const [hideTimer, setHideTimer] = usePersistentState<boolean>('ss.hideTimer', true)
   const [kitAvoid, setKitAvoid] = usePersistentState<Record<string, string[]>>('ss.kitAvoid', {})
   const [teamHistory, setTeamHistory] = usePersistentState<Record<string, string[]>>('ss.history', {})
+  const [lineupHistory, setLineupHistory] = usePersistentState<LineupRecord[]>('ss.lineupHistory', [])
+  const [confirmed, setConfirmed] = usePersistentState<boolean>('ss.confirmed', false)
   const [warnings, setWarnings] = useState<string[]>([])
 
   const benched = useMemo(() => new Set(benchedList), [benchedList])
   const gks = useMemo(() => new Set(gkList), [gkList])
   const paid = useMemo(() => new Set(paidList), [paidList])
-  const completed = useMemo(() => new Set(completedList), [completedList])
   const activePlayers = useMemo(() => roster.filter((p) => !benched.has(p)), [roster, benched])
   const ratingOf = (name: string) => ratings[toTitleCase(name)] ?? ratings[name] ?? 2
 
@@ -128,6 +129,7 @@ export default function App() {
       keepApart: keep('apart'),
       kitAvoid,
       teamHistory,
+      lineupHistory,
     })
     const sched = extendSchedule(generateSchedule(t, targetSize), 20)
     setTeams(t)
@@ -136,9 +138,27 @@ export default function App() {
     setMatchScores(sched.map(() => [0, 0]))
     setCompletedList([])
     setCurrentMatch(0)
+    setConfirmed(false)
+    vibrate(HAPTIC.success)
+    setView('result')
+  }
+
+  const editTeams = (next: Team[]) => {
+    setTeams(next)
+    setSchedule(extendSchedule(generateSchedule(next, settings.targetSize), 20))
+    setConfirmed(false)
+  }
+
+  const confirmLineup = () => {
+    if (teams.length === 0) return
+    const record: LineupRecord = {
+      confirmedAt: new Date().toISOString(),
+      teams: teams.map((t) => [...t.players]),
+    }
+    setLineupHistory((prev) => [record, ...prev].slice(0, 5))
     setTeamHistory((prev) => {
       const next = { ...prev }
-      for (const team of t) {
+      for (const team of teams) {
         for (const p of team.players) {
           const hist = next[p] ?? []
           next[p] = [team.color.id, ...hist].slice(0, 5)
@@ -146,14 +166,8 @@ export default function App() {
       }
       return next
     })
+    setConfirmed(true)
     vibrate(HAPTIC.success)
-    setView('result')
-  }
-
-  const editTeams = (next: Team[]) => {
-    // A drag swap keeps the same fixtures, so the running scores/game stay put.
-    setTeams(next)
-    setSchedule(extendSchedule(generateSchedule(next, settings.targetSize), 20))
   }
 
   // Adopt a schedule pasted from a chat / previous week. Reuses existing team
@@ -174,12 +188,6 @@ export default function App() {
     return true
   }
 
-  // --- Match checklist (which games are played) ---
-  const toggleMatchDone = (index: number) =>
-    setCompletedList((prev) =>
-      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index],
-    )
-  const resetChecklist = () => setCompletedList([])
 
   // --- Scoreboard ---
   const bumpScore = (side: 0 | 1, delta: number) =>
@@ -259,16 +267,14 @@ export default function App() {
         return (
           <ResultView
             teams={teams}
-            schedule={schedule}
             settings={settings}
             paid={paid}
             gks={gks}
             ratingOf={ratingOf}
             balancing={balancing}
             warnings={warnings}
-            completed={completed}
-            onToggleMatchDone={toggleMatchDone}
-            onResetChecklist={resetChecklist}
+            confirmed={confirmed}
+            onConfirm={confirmLineup}
             onTogglePaid={togglePaid}
             onRegenerate={generate}
             onEditTeams={editTeams}

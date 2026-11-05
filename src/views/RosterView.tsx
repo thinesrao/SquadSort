@@ -52,8 +52,6 @@ export function RosterView({
   roster,
   ratingOf,
   onRate,
-  isGk,
-  onToggleGk,
   showRatings,
   onToggleShowRatings,
   onAddPlayer,
@@ -164,7 +162,7 @@ export function RosterView({
                   }`}
                 >
                   <Star className={`h-3 w-3 ${showRatings ? 'fill-amber-400 text-amber-400' : ''}`} />
-                  {showRatings ? 'Hide ratings' : 'Rate & GK'}
+                  {showRatings ? 'Hide ratings' : 'Rate'}
                 </button>
               </div>
             </div>
@@ -219,19 +217,7 @@ export function RosterView({
                   )}
 
                   {showRatings && editIndex !== i && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => onToggleGk(name)}
-                        aria-label={`${name} goalkeeper`}
-                        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold transition active:scale-95 ${
-                          isGk(name) ? 'bg-emerald-500 text-emerald-950' : 'bg-zinc-800 text-zinc-500'
-                        }`}
-                      >
-                        GK
-                      </button>
-                      <StarRating value={ratingOf(name)} onChange={(v) => onRate(name, v)} size={16} />
-                    </>
+                    <StarRating value={ratingOf(name)} onChange={(v) => onRate(name, v)} size={16} />
                   )}
 
                   {editIndex !== i && (

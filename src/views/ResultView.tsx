@@ -4,26 +4,24 @@ import {
   Users,
   Copy,
   Check,
+  CheckCircle,
   Shuffle,
   Image as ImageIcon,
   Loader2,
   Hand,
   Link,
   AlertTriangle,
-  ListOrdered,
   Shirt,
   X,
-  RotateCcw,
 } from 'lucide-react'
 import { ViewShell } from '../components/ViewShell'
 import { TeamCard } from '../components/TeamCard'
-import { MatchCard } from '../components/MatchCard'
 import { formatForWhatsApp } from '../lib/format'
 import { shareTeamsImage, type ShareMode } from '../lib/shareImage'
 import { buildShareUrl } from '../lib/shareLink'
 import { swapToTeamBalanced } from '../lib/teamEdit'
 import { usePlayerDrag } from '../hooks/usePlayerDrag'
-import type { Match, Settings, Team } from '../types'
+import type { Settings, Team } from '../types'
 
 interface KitSwapTarget {
   teamId: number
@@ -33,16 +31,14 @@ interface KitSwapTarget {
 
 interface ResultViewProps {
   teams: Team[]
-  schedule: Match[]
   settings: Settings
   paid: Set<string>
   gks: Set<string>
   ratingOf: (name: string) => number
   balancing: boolean
   warnings: string[]
-  completed: Set<number>
-  onToggleMatchDone: (index: number) => void
-  onResetChecklist: () => void
+  confirmed: boolean
+  onConfirm: () => void
   onTogglePaid: (name: string) => void
   onRegenerate: () => void
   onEditTeams: (next: Team[]) => void
@@ -196,16 +192,14 @@ function KitSwapSheet({ target, teams, onPick, onClose }: KitSwapSheetProps) {
 
 export function ResultView({
   teams,
-  schedule,
   settings,
   paid,
   gks,
   ratingOf,
   balancing,
   warnings,
-  completed,
-  onToggleMatchDone,
-  onResetChecklist,
+  confirmed,
+  onConfirm,
   onTogglePaid,
   onRegenerate,
   onEditTeams,
@@ -232,11 +226,8 @@ export function ResultView({
   const showStrength = balancing || new Set(teams.flatMap((t) => t.players).map(ratingOf)).size > 1
   const spread = Math.max(...strengths) - Math.min(...strengths)
 
-  const playedCount = schedule.reduce((n, m) => n + (completed.has(m.index) ? 1 : 0), 0)
-  const nextIndex = schedule.find((m) => !completed.has(m.index))?.index ?? null
-
   const handleCopy = async () => {
-    const ok = await copyText(formatForWhatsApp(teams, schedule, settings, paid, gks))
+    const ok = await copyText(formatForWhatsApp(teams, [], settings, paid, gks))
     if (ok) {
       setCopied(true)
       window.setTimeout(() => setCopied(false), 1800)
@@ -255,7 +246,7 @@ export function ResultView({
     if (shareBusy) return
     setShareBusy(mode)
     try {
-      await shareTeamsImage(teams, schedule, settings, { mode, paid, gks })
+      await shareTeamsImage(teams, [], settings, { mode, paid, gks })
       setShareDone(mode)
       window.setTimeout(() => setShareDone((d) => (d === mode ? null : d)), 1800)
     } catch {
@@ -343,39 +334,19 @@ export function ResultView({
           </p>
         </div>
 
-        {/* Schedule checklist — tick games off, next one is highlighted */}
-        {schedule.length > 0 && (
-          <div className="flex flex-col">
-            <div className="mb-1.5 flex items-center justify-between">
-              <h2 className="text-xs font-bold uppercase tracking-wide text-zinc-500">
-                Match Schedule
-                <span className="ml-1.5 font-semibold text-emerald-400/90">
-                  {playedCount}/{schedule.length} played
-                </span>
-              </h2>
-              {playedCount > 0 && (
-                <button
-                  type="button"
-                  onClick={onResetChecklist}
-                  className="flex items-center gap-1 text-[11px] font-semibold text-zinc-500 active:scale-95"
-                >
-                  <RotateCcw className="h-3 w-3" /> Reset
-                </button>
-              )}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {schedule.map((m) => (
-                <MatchCard
-                  key={m.index}
-                  match={m}
-                  teams={teams}
-                  done={completed.has(m.index)}
-                  isNext={m.index === nextIndex}
-                  onToggleDone={() => onToggleMatchDone(m.index)}
-                />
-              ))}
-            </div>
+        {/* Confirm lineup */}
+        {confirmed ? (
+          <div className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-400 ring-1 ring-emerald-500/25">
+            <CheckCircle className="h-4 w-4" /> Lineup confirmed
           </div>
+        ) : (
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="flex shrink-0 items-center justify-center gap-2 rounded-2xl bg-emerald-500 py-3 text-base font-bold text-emerald-950 transition active:scale-[0.98]"
+          >
+            <CheckCircle className="h-5 w-5" /> Confirm lineup
+          </button>
         )}
 
         {/* Actions */}
@@ -394,7 +365,7 @@ export function ResultView({
             <div className="mb-1 flex items-center gap-1.5 px-0.5 text-[11px] font-bold uppercase tracking-wide text-zinc-500">
               <ImageIcon className="h-3.5 w-3.5" /> Share image
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <ShareButton
                 label="Teams"
                 icon={<Users className="h-4 w-4" />}
@@ -403,15 +374,7 @@ export function ResultView({
                 onClick={() => handleShare('teams')}
               />
               <ShareButton
-                label="Schedule"
-                icon={<ListOrdered className="h-4 w-4" />}
-                busy={shareBusy === 'schedule'}
-                done={shareDone === 'schedule'}
-                disabled={schedule.length === 0}
-                onClick={() => handleShare('schedule')}
-              />
-              <ShareButton
-                label="Both"
+                label="Teams + Image"
                 icon={<ImageIcon className="h-4 w-4" />}
                 primary
                 busy={shareBusy === 'both'}
